@@ -1,0 +1,37 @@
+# Bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Local reports
+devdoctor-report.json
+devdoctor-report.html
+devdoctor-report.md
+devdoctor-report.pdf

@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible DevDoctor problem.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve DevDoctor. Please include enough detail for maintainers to reproduce the issue without guessing about your workstation.
+  - type: input
+    id: version
+    attributes:
+      label: DevDoctor version
+      description: Run `devdoctor --version`.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      description: Include distro name and version.
+      placeholder: "Fedora 42, Ubuntu 24.04, Arch Linux"
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Interface
+      options:
+        - Dashboard
+        - Classic Rich report
+        - JSON/export mode
+        - Packaging/install
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      description: Terminal emulator and color mode if UI-related.
+      placeholder: "GNOME Terminal truecolor, Konsole 256-color, tmux"
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: Paste relevant terminal output. Remove secrets before submitting.
+      render: text
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or recording
+      description: Drag screenshots or terminal recordings here for visual issues.

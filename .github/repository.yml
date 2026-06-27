@@ -1,0 +1,24 @@
+repository:
+  name: DevDoctor
+  description: "Interactive Linux workstation health dashboard for developers and DevOps engineers."
+  homepage: "https://github.com/imedkablavi/DevDoctor"
+  private: false
+  has_issues: true
+  has_projects: true
+  has_wiki: false
+  has_discussions: true
+  default_branch: main
+
+topics:
+  - linux
+  - cli
+  - terminal
+  - textual
+  - rich
+  - python
+  - developer-tools
+  - devops
+  - diagnostics
+  - workstation
+  - health-check
+  - open-source

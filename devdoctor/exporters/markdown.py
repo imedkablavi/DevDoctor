@@ -1,0 +1,70 @@
+"""Markdown report exporter."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from devdoctor.models import CheckStatus, HealthReport
+
+
+def render_markdown(report: HealthReport) -> str:
+    """Render a health report as Markdown."""
+
+    summary = report.summary
+    lines = [
+        "# DevDoctor Health Report",
+        "",
+        f"- Generated: `{report.generated_at.isoformat()}`",
+        f"- Duration: `{report.duration_seconds:.2f}s`",
+        f"- Score: **{report.score}/100**",
+        f"- Passed: `{summary.passed}`",
+        f"- Warnings: `{summary.warnings}`",
+        f"- Failed: `{summary.failed}`",
+        "",
+        "## System Information",
+        "",
+    ]
+    for key, value in report.system_info.items():
+        lines.append(f"- **{key.replace('_', ' ').title()}**: `{value}`")
+
+    lines.extend(["", "## Recommendations", ""])
+    if report.recommendations:
+        lines.extend(
+            f"{index}. {item}" for index, item in enumerate(report.recommendations, start=1)
+        )
+    else:
+        lines.append("No recommendations. Your development environment looks healthy.")
+
+    lines.extend(
+        [
+            "",
+            "## Checks",
+            "",
+            "| Status | Check | Category | Summary | Recommendation |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for result in report.results:
+        icon = {
+            CheckStatus.PASS: "OK",
+            CheckStatus.WARNING: "WARN",
+            CheckStatus.FAIL: "FAIL",
+        }[result.status]
+        lines.append(
+            "| "
+            f"{icon} | {_escape_table(result.title)} | {result.category.value} | "
+            f"{_escape_table(result.summary)} | {_escape_table(result.recommendation or '')} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_markdown_report(report: HealthReport, path: Path) -> Path:
+    """Write a Markdown report to disk."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_markdown(report), encoding="utf-8")
+    return path
+
+
+def _escape_table(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")

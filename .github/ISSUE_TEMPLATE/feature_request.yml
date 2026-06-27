@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest a new check, exporter, integration, workflow, or design improvement.
+title: "feature: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What developer workflow or diagnosis gap should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the behavior you want.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard UX
+        - Check/plugin
+        - Exporter
+        - Package manager guidance
+        - Documentation
+        - Branding
+        - CI/release
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: textarea
+    id: design
+    attributes:
+      label: Design notes
+      description: Include terminal screenshots, mockups, commands, or expected output when relevant.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety expectations
+      options:
+        - label: The feature can run without root privileges.
+          required: true
+        - label: The feature does not perform destructive operations.
+          required: true

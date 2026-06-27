@@ -1,0 +1,35 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">DevDoctor GitHub social banner</title>
+  <desc id="desc">DevDoctor branded banner for GitHub social previews.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="0.55" stop-color="#101A2E"/>
+      <stop offset="1" stop-color="#052E2B"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="184" y1="118" x2="500" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13 0 0 0 0 0.83 0 0 0 0 0.93 0 0 0 0.4 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <rect width="1280" height="640" rx="48" fill="url(#background)"/>
+  <path d="M0 520C250 420 460 470 650 534C832 596 1012 604 1280 480V640H0V520Z" fill="#07111F" opacity="0.8"/>
+  <path d="M840 94H1160" stroke="#1E3A5F" stroke-width="2"/>
+  <path d="M840 154H1100" stroke="#1E3A5F" stroke-width="2"/>
+  <path d="M840 214H1184" stroke="#1E3A5F" stroke-width="2"/>
+  <path d="M840 274H1050" stroke="#1E3A5F" stroke-width="2"/>
+  <g filter="url(#glow)">
+    <path d="M316 112L516 312L316 512L116 312L316 112Z" fill="url(#accent)"/>
+    <path d="M316 176L452 312L316 448L180 312L316 176Z" fill="#08111F"/>
+    <path d="M230 291H294V227H338V291H402V335H338V399H294V335H230V291Z" fill="url(#accent)"/>
+  </g>
+  <text x="580" y="274" fill="#E5F6FF" font-family="Inter, Noto Sans, Segoe UI, sans-serif" font-size="92" font-weight="850" letter-spacing="0">DevDoctor</text>
+  <text x="586" y="335" fill="#B7F7E0" font-family="Inter, Noto Sans, Segoe UI, sans-serif" font-size="31" font-weight="650">Diagnose your dev environment in seconds.</text>
+  <text x="588" y="414" fill="#8EA4BD" font-family="JetBrains Mono, Noto Sans Mono, monospace" font-size="26">dashboard  -  checks  -  exports  -  plugins</text>
+</svg>

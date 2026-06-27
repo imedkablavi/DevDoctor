@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">DevDoctor app icon</title>
+  <desc id="desc">A glowing diagnostic diamond with a terminal health cross.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="32" x2="448" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101A2E"/>
+      <stop offset="1" stop-color="#050914"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="82" y1="68" x2="430" y2="444" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.52" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.13 0 0 0 0 0.83 0 0 0 0 0.93 0 0 0 0.5 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="18" y="18" width="476" height="476" rx="98" stroke="#263A55" stroke-width="8"/>
+  <path opacity="0.42" d="M90 384H422" stroke="#1E293B" stroke-width="12" stroke-linecap="round"/>
+  <g filter="url(#glow)">
+    <path d="M256 66L446 256L256 446L66 256L256 66Z" fill="url(#mark)"/>
+    <path d="M256 128L384 256L256 384L128 256L256 128Z" fill="#09111F"/>
+    <path d="M174 236H236V174H276V236H338V276H276V338H236V276H174V236Z" fill="url(#mark)"/>
+    <path d="M150 150H206V178H150V150Z" fill="#67E8F9"/>
+    <path d="M306 334H362V362H306V334Z" fill="#34D399"/>
+  </g>
+</svg>
+
