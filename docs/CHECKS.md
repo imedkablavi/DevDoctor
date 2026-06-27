@@ -6,11 +6,11 @@ Checks are registered through `CheckPlugin` metadata. The built-in registry pres
 
 ## System
 
-- Linux distribution: hostname, username, distro name, ID, ID-like family, version, and support status.
+- Linux distribution: hostname, username, distro name, ID, ID-like family, version, support status, desktop/session hints, shell, terminal, primary package manager, battery, and temperature when available.
 - Kernel: release, version, architecture, and Python platform string.
-- CPU: model, logical cores, physical cores, and load averages.
-- RAM: total memory, available memory, and utilization.
-- Disk: free, used, total, and utilization for the user's home filesystem.
+- CPU: model, logical cores, physical cores, current utilization, and load averages.
+- RAM: total memory, available memory, utilization, swap capacity, and swap utilization.
+- Disk: free, used, total, utilization, filesystem, device, and mountpoint for the user's home filesystem.
 - Uptime: boot time and elapsed uptime.
 - GPU: detected through `lspci` or `nvidia-smi` when available.
 

@@ -15,7 +15,7 @@ The default command opens the Textual dashboard when attached to an interactive 
 - Permanent sidebar navigation
 - Search
 - Tool cards and detail pages
-- Package-manager inventory
+- Package-manager inventory with version and command hints
 - Optimization and Auto Fix command previews
 - JSON, HTML, Markdown, PDF, and clipboard report actions
 - Recommendations

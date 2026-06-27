@@ -4,15 +4,15 @@ DevDoctor launches into an interactive Textual dashboard by default when attache
 
 ## Pages
 
-- Health Overview: score, pass/warning/failure counts, last scan, and recommendations.
-- System: CPU, RAM, GPU, disk, kernel, distribution, hostname, and architecture.
+- Health Overview: score, live health cards, pass/warning/failure counts, last scan, and recommendations.
+- System: CPU, RAM, swap, disk, filesystem, GPU, kernel, distribution, hostname, architecture, session, shell, battery, and temperature when available.
 - Development Tools: cards for Git, Docker, Podman, Python, Node.js, npm, pnpm, Bun, Rust, Cargo, Go, Java, Terraform, Helm, kubectl, and GitHub CLI.
 - Containers: focused Docker and Podman view.
 - Networking: internet, DNS, and GitHub reachability.
 - Security: safe local posture signals derived from non-invasive checks.
-- Packages: installed package-manager inventory.
-- Optimization: cleanup command previews with estimated space where detectable.
-- Auto Fix: distro-aware install plans for missing tools.
+- Packages: package-manager inventory with version, path, family, and command hint.
+- Optimization: cleanup command previews with estimated space and risk.
+- Auto Fix: grouped distro-aware install plans for missing tools.
 - Reports: JSON, HTML, Markdown, PDF, and clipboard actions.
 - Settings: theme and refresh controls for the running dashboard.
 - Shortcuts: keyboard map for dashboard workflows.

@@ -80,10 +80,10 @@ devdoctor --pdf-file report.pdf
 
 | Area | Checks |
 | --- | --- |
-| System | Distribution, kernel, architecture, CPU, RAM, disk, uptime, GPU |
+| System | Distribution, kernel, architecture, CPU usage, RAM, swap, disk, filesystem, uptime, GPU, session, shell, battery and temperature when available |
 | Tools | Git, Python, Docker, Podman, Node.js, npm, pnpm, Bun, Rust, Cargo, Go, Java, GitHub CLI, kubectl, Helm, Terraform |
 | Network | Internet connectivity, DNS resolution, GitHub HTTPS reachability |
-| Packages | APT, DNF, Pacman, RPM, Flatpak, Snap, Homebrew, Cargo, pip, npm, pnpm |
+| Packages | APT, DNF, Pacman, yay, paru, RPM, Flatpak, Snap, Homebrew, Cargo, pip, npm, pnpm, Bun |
 | Reports | JSON, HTML, Markdown, compact PDF, clipboard copy, latest-report cache |
 
 ## Why Use It

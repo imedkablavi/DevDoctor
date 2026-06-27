@@ -15,12 +15,14 @@ def check_cpu() -> CheckResult:
 
     logical = psutil.cpu_count(logical=True) or 0
     physical = psutil.cpu_count(logical=False) or 0
+    usage_percent = psutil.cpu_percent(interval=None)
     load = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0.0, 0.0, 0.0)
     model = _cpu_model()
     details = {
         "cpu": model,
         "logical_cores": logical,
         "physical_cores": physical,
+        "cpu_usage_percent": round(usage_percent, 1),
         "load_1m": round(load[0], 2),
         "load_5m": round(load[1], 2),
         "load_15m": round(load[2], 2),

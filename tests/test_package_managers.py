@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from devdoctor import package_managers
+from devdoctor.utils import CommandResult
 
 
 def test_install_plan_uses_apt_for_ubuntu(monkeypatch: object) -> None:
@@ -111,3 +112,31 @@ def test_install_plan_includes_python_runtime(monkeypatch: object) -> None:
     assert plan is not None
     assert plan.manager == "APT"
     assert plan.command == "sudo apt install python3 python3-pip"
+
+
+def test_detect_package_managers_includes_version_and_command_hint(
+    monkeypatch: object,
+) -> None:
+    monkeypatch.setattr(
+        package_managers.shutil,
+        "which",
+        lambda name: f"/usr/bin/{name}" if name == "pnpm" else None,
+    )
+    monkeypatch.setattr(
+        package_managers,
+        "run_command",
+        lambda command, timeout=3: CommandResult(
+            command=tuple(command),
+            returncode=0,
+            stdout="pnpm 10.4.1\n",
+            stderr="",
+            duration_seconds=0.01,
+        ),
+    )
+
+    managers = package_managers.detect_package_managers()
+    pnpm = next(manager for manager in managers if manager.id == "pnpm")
+
+    assert pnpm.installed is True
+    assert pnpm.version == "10.4.1"
+    assert pnpm.command_hint == "pnpm add <package>"

@@ -712,7 +712,7 @@ class DevDoctorDashboard(App[None]):
         return (
             Static("Health Overview", classes="page-title"),
             health,
-            self.summary_cards(),
+            self.overview_health_cards(),
             Static(
                 Panel(recommendations, title="Recommendations", border_style="yellow"),
                 classes="card",
@@ -721,19 +721,85 @@ class DevDoctorDashboard(App[None]):
 
     def system_page(self) -> tuple[object, ...]:
         info = self.require_report().system_info
-        card_widgets: list[Static] = []
-        for title, key in (
-            ("CPU", "cpu"),
-            ("RAM", "ram_total"),
-            ("GPU", "gpu"),
-            ("Disk", "disk_free"),
-            ("Kernel", "kernel"),
-            ("Distribution", "distribution"),
-            ("Hostname", "hostname"),
-            ("Architecture", "architecture"),
-        ):
-            value = info.get(key, "Not available")
-            card_widgets.append(Static(self.metric_panel(title, str(value)), classes="card"))
+        cards = (
+            (
+                "CPU",
+                "\n".join(
+                    (
+                        str(info.get("cpu", "Not available")),
+                        f"Usage: {_display_percent(info.get('cpu_usage_percent'))}",
+                        f"Cores: {info.get('physical_cores', 'unknown')} physical / "
+                        f"{info.get('logical_cores', 'unknown')} logical",
+                        "Load: "
+                        f"{info.get('load_1m', 'n/a')} / "
+                        f"{info.get('load_5m', 'n/a')} / "
+                        f"{info.get('load_15m', 'n/a')}",
+                    )
+                ),
+            ),
+            (
+                "Memory",
+                "\n".join(
+                    (
+                        f"RAM: {info.get('ram_total', 'unknown')}",
+                        f"Available: {info.get('ram_available', 'unknown')}",
+                        f"Used: {_display_percent(info.get('ram_used_percent'))}",
+                        f"Swap: {info.get('swap_total', 'unknown')} "
+                        f"({_display_percent(info.get('swap_used_percent'))})",
+                    )
+                ),
+            ),
+            (
+                "Disk",
+                "\n".join(
+                    (
+                        f"Path: {info.get('disk_path', 'unknown')}",
+                        f"Free: {info.get('disk_free', 'unknown')}",
+                        f"Used: {_display_percent(info.get('disk_used_percent'))}",
+                        f"Filesystem: {info.get('filesystem', 'unknown')}",
+                        f"Device: {info.get('disk_device', 'unknown')}",
+                    )
+                ),
+            ),
+            (
+                "Session",
+                "\n".join(
+                    (
+                        f"Desktop: {info.get('desktop_environment', 'unknown')}",
+                        f"Session: {info.get('session_type', 'unknown')}",
+                        f"Shell: {info.get('shell', 'unknown')}",
+                        f"Terminal: {info.get('terminal', 'unknown')}",
+                        f"Package manager: {info.get('primary_package_manager', 'unknown')}",
+                    )
+                ),
+            ),
+            (
+                "Platform",
+                "\n".join(
+                    (
+                        str(info.get("distribution", "unknown")),
+                        f"Kernel: {info.get('kernel', 'unknown')}",
+                        f"Arch: {info.get('architecture', 'unknown')}",
+                        f"Hostname: {info.get('hostname', 'unknown')}",
+                        f"Uptime: {info.get('uptime', 'unknown')}",
+                    )
+                ),
+            ),
+            (
+                "Hardware",
+                "\n".join(
+                    (
+                        f"GPU: {info.get('gpu', 'Not detected')}",
+                        f"Battery: {info.get('battery', 'Not detected')}",
+                        f"Temperature: {info.get('temperature', 'Not detected')}",
+                    )
+                ),
+            ),
+        )
+        card_widgets = [
+            Static(self.metric_panel(title, value), classes="card metric-card")
+            for title, value in cards
+        ]
         cards = self.card_grid(card_widgets)
         return (Static("System", classes="page-title"), cards)
 
@@ -777,21 +843,30 @@ class DevDoctorDashboard(App[None]):
         return (Static(title, classes="page-title"), grid)
 
     def networking_page(self) -> tuple[object, ...]:
-        report = self.require_report()
-        results = tuple(
-            result for result in report.results if result.category is CheckCategory.NETWORK
-        )
-        cards = [
-            Static(
-                self.metric_panel(
-                    result.title,
-                    f"{status_icon(result.status)} {result.summary}\n"
-                    f"{result.recommendation or 'No action required.'}",
-                ),
-                classes="card metric-card",
+        cards: list[Static] = []
+        for result in (
+            self.result_by_id("network.internet"),
+            self.result_by_id("network.dns"),
+            self.result_by_id("network.github"),
+        ):
+            if result is None:
+                continue
+            details = self.network_detail_lines(result)
+            cards.append(
+                Static(
+                    self.metric_panel(
+                        result.title,
+                        "\n".join(
+                            (
+                                f"{status_icon(result.status)} {result.summary}",
+                                *details,
+                                result.recommendation or "No action required.",
+                            )
+                        ),
+                    ),
+                    classes="card metric-card",
+                )
             )
-            for result in results
-        ]
         return (
             Static("Networking", classes="page-title"),
             self.card_grid(cards),
@@ -841,7 +916,15 @@ class DevDoctorDashboard(App[None]):
                 Static(
                     self.metric_panel(
                         manager.title,
-                        f"{status}\n{manager.path or 'No executable found'}\n{manager.family}",
+                        "\n".join(
+                            (
+                                status,
+                                f"Version: {manager.version or 'Not detected'}",
+                                f"Path: {manager.path or 'No executable found'}",
+                                f"Family: {manager.family}",
+                                f"Command: {manager.command_hint}",
+                            )
+                        ),
                     ),
                     classes="card metric-card",
                 )
@@ -855,7 +938,8 @@ class DevDoctorDashboard(App[None]):
                 Vertical(
                     Static(
                         f"{action.title}\n{action.description}\n"
-                        f"Estimated freed space: {action.estimated_freed}\n{action.command}"
+                        f"Estimated freed space: {action.estimated_freed}\n"
+                        f"Risk: {_action_risk(action)}\n{action.command}"
                     ),
                     Button(
                         "Review Command",
@@ -874,18 +958,30 @@ class DevDoctorDashboard(App[None]):
         if not plans:
             rows.append(Static("No installable missing-tool fixes detected.", classes="card"))
             return tuple(rows)
-        for plan in plans:
-            rows.append(
-                Vertical(
-                    Static(f"{plan.tool_title}\n{plan.note}\n{plan.command}"),
-                    Button(
-                        "Review Install",
-                        id=f"install-{_safe_id(plan.tool_id)}",
-                        classes="install-action",
-                    ),
-                    classes="card",
+        for category, category_plans in _group_install_plans(plans).items():
+            rows.append(Static(category, classes="page-title"))
+            for plan in category_plans:
+                rows.append(
+                    Vertical(
+                        Static(
+                            "\n".join(
+                                (
+                                    plan.tool_title,
+                                    f"Reason: {plan.note}",
+                                    f"Estimated time: {_plan_estimated_time(plan)}",
+                                    f"Risk: {_plan_risk(plan)}",
+                                    plan.command,
+                                )
+                            )
+                        ),
+                        Button(
+                            "Review Install",
+                            id=f"install-{_safe_id(plan.tool_id)}",
+                            classes="install-action",
+                        ),
+                        classes="card",
+                    )
                 )
-            )
         return tuple(rows)
 
     def reports_page(self) -> tuple[object, ...]:
@@ -1040,6 +1136,117 @@ class DevDoctorDashboard(App[None]):
             raise RuntimeError("Report is not available yet.")
         return self.report
 
+    def overview_health_cards(self) -> Grid:
+        """Return high-signal workstation health cards for the overview."""
+
+        report = self.require_report()
+        info = report.system_info
+        cards: list[Static] = []
+        definitions = (
+            (
+                "CPU",
+                self.result_by_id("system.cpu"),
+                f"{_display_percent(info.get('cpu_usage_percent'))} used\n"
+                f"{info.get('logical_cores', 'unknown')} logical cores",
+                _as_percent(info.get("cpu_usage_percent")),
+            ),
+            (
+                "RAM",
+                self.result_by_id("system.ram"),
+                f"{info.get('ram_available', 'unknown')} available\n"
+                f"Swap: {_display_percent(info.get('swap_used_percent'))}",
+                _as_percent(info.get("ram_used_percent")),
+            ),
+            (
+                "Disk",
+                self.result_by_id("system.disk"),
+                f"{info.get('disk_free', 'unknown')} free\n"
+                f"{info.get('filesystem', 'unknown')} on {info.get('disk_mountpoint', 'unknown')}",
+                _as_percent(info.get("disk_used_percent")),
+            ),
+            (
+                "Internet",
+                self.result_by_id("network.internet"),
+                _result_summary(self.result_by_id("network.internet")),
+                None,
+            ),
+            (
+                "DNS",
+                self.result_by_id("network.dns"),
+                _result_summary(self.result_by_id("network.dns")),
+                None,
+            ),
+            (
+                "GitHub",
+                self.result_by_id("network.github"),
+                _result_summary(self.result_by_id("network.github")),
+                None,
+            ),
+            ("Docker", self.result_by_id("tool.docker"), _tool_line("tool.docker", self), None),
+            ("Podman", self.result_by_id("tool.podman"), _tool_line("tool.podman", self), None),
+            ("Python", self.result_by_id("tool.python"), _tool_line("tool.python", self), None),
+            ("Git", self.result_by_id("tool.git"), _tool_line("tool.git", self), None),
+            ("Node.js", self.result_by_id("tool.node"), _tool_line("tool.node", self), None),
+            (
+                "Platform",
+                self.result_by_id("system.os"),
+                f"{info.get('distribution', 'unknown')}\nKernel: {info.get('kernel', 'unknown')}",
+                None,
+            ),
+        )
+        for title, result, body, percent in definitions:
+            cards.append(
+                Static(
+                    self.health_panel(title, result, body, percent=percent),
+                    classes="card metric-card",
+                )
+            )
+        return self.card_grid(cards)
+
+    def health_panel(
+        self,
+        title: str,
+        result: CheckResult | None,
+        body: str,
+        *,
+        percent: float | None = None,
+    ) -> Panel:
+        """Render a compact status card with an optional utilization bar."""
+
+        status = (
+            "Unknown" if result is None else f"{status_icon(result.status)} {result.status.value}"
+        )
+        parts: list[object] = [Text(status, style="bright_white"), Text(body)]
+        if percent is not None:
+            parts.append(ProgressBar(total=100, completed=max(0, min(100, percent)), width=24))
+        return Panel(
+            Group(*parts),
+            title=title,
+            border_style=_status_border(result),
+        )
+
+    def network_detail_lines(self, result: CheckResult) -> tuple[str, ...]:
+        """Return concise network details without hiding raw diagnostic value."""
+
+        if result.id == "network.internet":
+            probes = result.details.get("probes", ())
+            lines = [
+                f"{probe.get('host')}:{probe.get('port')} {_latency_label(probe.get('latency_ms'))}"
+                for probe in probes
+                if isinstance(probe, dict)
+            ]
+            return tuple(lines[:3])
+        if result.id == "network.dns":
+            resolved = result.details.get("resolved", {})
+            if isinstance(resolved, dict) and resolved:
+                return tuple(f"{host} -> {address}" for host, address in resolved.items())
+        if result.id == "network.github":
+            return (
+                f"Address: {result.details.get('address', 'unknown')}",
+                f"Latency: {_latency_label(result.details.get('latency_ms'))}",
+            )
+        return ()
+
     def summary_cards(self) -> Grid:
         """Return compact score summary cards."""
 
@@ -1142,6 +1349,96 @@ def _unsafe_id(value: str) -> str:
 
 def _nav_label(item: NavItem) -> str:
     return f"{NAV_ICONS.get(item.id, '·')} {item.title}"
+
+
+def _display_percent(value: object) -> str:
+    percent = _as_percent(value)
+    if percent is None:
+        return "unknown"
+    return f"{percent:.1f}%"
+
+
+def _as_percent(value: object) -> float | None:
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _result_summary(result: CheckResult | None) -> str:
+    if result is None:
+        return "Not available"
+    return result.summary
+
+
+def _tool_line(result_id: str, app: DevDoctorDashboard) -> str:
+    result = app.result_by_id(result_id)
+    if result is None:
+        return "Not available"
+    version = result.details.get("version") or result.details.get("python_version")
+    path = result.details.get("path") or result.details.get("python_executable")
+    return f"{version or result.summary}\n{path or 'Path not detected'}"
+
+
+def _status_border(result: CheckResult | None) -> str:
+    if result is None:
+        return "bright_black"
+    return {
+        "pass": "green",
+        "warning": "yellow",
+        "fail": "red",
+    }.get(result.status.value, "bright_black")
+
+
+def _latency_label(value: object) -> str:
+    if isinstance(value, int | float):
+        return f"{value:.0f} ms"
+    return "unreachable"
+
+
+def _group_install_plans(plans: tuple[InstallPlan, ...]) -> dict[str, list[InstallPlan]]:
+    grouped: dict[str, list[InstallPlan]] = {
+        "Development": [],
+        "Containers": [],
+        "Cloud": [],
+        "Other": [],
+    }
+    for plan in plans:
+        grouped[_plan_category(plan)].append(plan)
+    return {category: items for category, items in grouped.items() if items}
+
+
+def _plan_category(plan: InstallPlan) -> str:
+    if plan.tool_id in {"tool.docker", "tool.podman"}:
+        return "Containers"
+    if plan.tool_id in {"tool.kubectl", "tool.helm", "tool.terraform", "tool.github_cli"}:
+        return "Cloud"
+    if plan.tool_id.startswith("tool."):
+        return "Development"
+    return "Other"
+
+
+def _plan_estimated_time(plan: InstallPlan) -> str:
+    if plan.manager in {"APT", "DNF", "Pacman", "rpm-ostree"}:
+        return "2-10 minutes"
+    if plan.manager == "Homebrew":
+        return "1-8 minutes"
+    return "Varies"
+
+
+def _plan_risk(plan: InstallPlan) -> str:
+    if plan.manager == "rpm-ostree":
+        return "Medium - layers a system package and usually requires reboot"
+    if plan.command.startswith("sudo "):
+        return "Medium - requires package-manager privileges"
+    return "Low - user-space package install"
+
+
+def _action_risk(action: MaintenanceAction) -> str:
+    if action.requires_sudo:
+        return "Medium - requires sudo and package-manager review"
+    if action.command.startswith("find /tmp"):
+        return "Medium - deletes matching user-owned temporary files"
+    return "Low - command asks the tool to confirm or report reclaimed space"
 
 
 def run_dashboard(*, network_timeout: float = 3.0) -> None:

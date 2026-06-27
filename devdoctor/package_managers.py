@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 
-from devdoctor.utils import read_os_release
+from devdoctor.utils import parse_version, read_os_release, run_command
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +18,8 @@ class PackageManagerInfo:
     installed: bool
     path: str | None
     family: str
+    version: str | None
+    command_hint: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,18 +34,21 @@ class InstallPlan:
     requires_confirmation: bool = True
 
 
-PACKAGE_MANAGERS: tuple[tuple[str, str, str, str], ...] = (
-    ("apt", "APT", "apt", "system"),
-    ("dnf", "DNF", "dnf", "system"),
-    ("pacman", "Pacman", "pacman", "system"),
-    ("rpm", "RPM", "rpm", "system"),
-    ("flatpak", "Flatpak", "flatpak", "desktop"),
-    ("snap", "Snap", "snap", "desktop"),
-    ("brew", "Homebrew", "brew", "user"),
-    ("cargo", "Cargo", "cargo", "language"),
-    ("pip", "pip", "pip", "language"),
-    ("npm", "npm", "npm", "language"),
-    ("pnpm", "pnpm", "pnpm", "language"),
+PACKAGE_MANAGERS: tuple[tuple[str, str, str, str, str], ...] = (
+    ("apt", "APT", "apt", "system", "sudo apt install <package>"),
+    ("dnf", "DNF", "dnf", "system", "sudo dnf install <package>"),
+    ("pacman", "Pacman", "pacman", "system", "sudo pacman -S <package>"),
+    ("yay", "yay", "yay", "system", "yay -S <package>"),
+    ("paru", "paru", "paru", "system", "paru -S <package>"),
+    ("rpm", "RPM", "rpm", "system", "rpm -qa"),
+    ("flatpak", "Flatpak", "flatpak", "desktop", "flatpak install <remote> <app>"),
+    ("snap", "Snap", "snap", "desktop", "sudo snap install <package>"),
+    ("brew", "Homebrew", "brew", "user", "brew install <formula>"),
+    ("cargo", "Cargo", "cargo", "language", "cargo install <crate>"),
+    ("pip", "pip", "pip", "language", "python -m pip install <package>"),
+    ("npm", "npm", "npm", "language", "npm install <package>"),
+    ("pnpm", "pnpm", "pnpm", "language", "pnpm add <package>"),
+    ("bun", "Bun", "bun", "language", "bun add <package>"),
 )
 
 APT_PACKAGES = {
@@ -127,7 +132,7 @@ def detect_package_managers() -> tuple[PackageManagerInfo, ...]:
     """Detect common Linux package managers and language package managers."""
 
     managers: list[PackageManagerInfo] = []
-    for manager_id, title, executable, family in PACKAGE_MANAGERS:
+    for manager_id, title, executable, family, command_hint in PACKAGE_MANAGERS:
         path = shutil.which(executable)
         managers.append(
             PackageManagerInfo(
@@ -137,9 +142,20 @@ def detect_package_managers() -> tuple[PackageManagerInfo, ...]:
                 installed=path is not None,
                 path=path,
                 family=family,
+                version=_manager_version(path),
+                command_hint=command_hint,
             )
         )
     return tuple(managers)
+
+
+def _manager_version(path: str | None) -> str | None:
+    """Return a package-manager version without failing detection."""
+
+    if path is None:
+        return None
+    result = run_command((path, "--version"), timeout=3)
+    return parse_version(result.combined_output)
 
 
 def install_plan_for_tool(tool_id: str, tool_title: str) -> InstallPlan | None:
