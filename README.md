@@ -1,9 +1,10 @@
 <p align="center">
-  <img src="assets/brand/github-social-banner.png" alt="DevDoctor" width="100%">
+  <img src="https://raw.githubusercontent.com/imedkablavi/DevDoctor/main/assets/brand/github-social-banner.png" alt="DevDoctor" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/imedkablavi/DevDoctor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imedkablavi/DevDoctor/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/imedkablavi/DevDoctor/actions/workflows/code-quality.yml"><img alt="Code Quality" src="https://github.com/imedkablavi/DevDoctor/actions/workflows/code-quality.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22D3EE">
   <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-34D399">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-8EA4BD"></a>
@@ -21,7 +22,19 @@ It is not a system monitor and it is not a scorecard. The default output is a pl
 
 DevDoctor does not run privileged commands during a scan. Commands that change the system are shown first and only run when you pass `--apply` and confirm them.
 
+## Demo
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/imedkablavi/DevDoctor/main/assets/screenshots/devdoctor-demo.gif" alt="DevDoctor terminal demonstration" width="100%">
+</p>
+
+The demo is generated from real `devdoctor --quiet` and `devdoctor search docker --no-color` output. See [assets/screenshots](assets/screenshots/README.md) for the regeneration notes.
+
 ## Terminal Preview
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/imedkablavi/DevDoctor/main/assets/screenshots/terminal-preview.png" alt="DevDoctor terminal preview" width="100%">
+</p>
 
 ```text
 $ devdoctor check --profile devops --missing
@@ -50,8 +63,10 @@ DevOps
 
 DevDoctor requires Python 3.11 or newer.
 
+From the GitHub repository:
+
 ```bash
-python -m pip install devdoctor
+python -m pip install "git+https://github.com/imedkablavi/DevDoctor.git"
 ```
 
 From a checkout:
@@ -60,6 +75,12 @@ From a checkout:
 git clone https://github.com/imedkablavi/DevDoctor.git
 cd DevDoctor
 python -m pip install -e ".[dev]"
+```
+
+After maintainers publish v1.1.0 to PyPI, the package install command is:
+
+```bash
+python -m pip install --upgrade devdoctor
 ```
 
 ## Quick Start
@@ -255,12 +276,27 @@ No. DevDoctor is intentionally Linux-first.
 
 ## Documentation
 
+- [CLI reference](docs/CLI_REFERENCE.md)
 - [Usage](docs/USAGE.md)
 - [Checks and catalog reference](docs/CHECKS.md)
+- [Examples](examples/README.md)
 - [Accessibility](docs/ACCESSIBILITY.md)
 - [Brand system](docs/BRAND.md)
 - [Release process](docs/RELEASE.md)
 - [Release notes](docs/RELEASE_NOTES_v1.1.0.md)
+- [Release readiness](RELEASE_READINESS.md)
+- [Roadmap](ROADMAP.md)
+- [Migration guide](MIGRATION_GUIDE.md)
+- [Security policy](SECURITY.md)
+- [Support](SUPPORT.md)
+
+## Contributing
+
+Contributions are welcome when they keep DevDoctor safe, local, Linux-focused, and honest about unavailable data. Start with [CONTRIBUTING.md](CONTRIBUTING.md), run the validation commands, and include terminal output or screenshots for user-facing changes.
+
+## Credits
+
+DevDoctor is built with [Typer](https://typer.tiangolo.com/), [Rich](https://rich.readthedocs.io/), [psutil](https://psutil.readthedocs.io/), and [platformdirs](https://platformdirs.readthedocs.io/). The project is maintained by DevDoctor contributors.
 
 ## License
 

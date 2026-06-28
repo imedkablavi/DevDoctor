@@ -1,0 +1,40 @@
+name: Performance issue
+description: Report slow startup, slow checks, or excessive subprocess work.
+title: "perf: "
+labels: ["performance", "needs reproduction"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: DevDoctor version
+      description: Run `devdoctor --version`.
+      placeholder: "1.1.0"
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: "Fedora 42, Ubuntu 24.04, Arch Linux"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: timing
+    attributes:
+      label: Timing details
+      description: Include `time devdoctor ...` output or other measurements.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Include PATH size, shell, terminal, or package managers if relevant.

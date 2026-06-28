@@ -2,6 +2,8 @@
 
 DevDoctor is a Linux workstation bootstrap CLI. The default command prints a local inventory and install plans; it does not open a dashboard and it does not calculate a health score.
 
+For exhaustive command details, see [CLI Reference](CLI_REFERENCE.md). For copyable workflows, see [Examples](../examples/README.md).
+
 ## Inventory
 
 ```bash

@@ -1,7 +1,7 @@
 name: Feature request
 description: Suggest a catalog entry, package manager, profile, exporter, workflow, or design improvement.
 title: "feature: "
-labels: ["enhancement", "needs-triage"]
+labels: ["enhancement", "needs triage"]
 body:
   - type: textarea
     id: problem

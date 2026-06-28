@@ -4,27 +4,69 @@
 - name: enhancement
   color: 22D3EE
   description: New or improved behavior.
+- name: documentation
+  color: B7F7E0
+  description: README, docs, examples, release notes, or help text.
+- name: good first issue
+  color: A7F3D0
+  description: Scoped contribution suitable for first-time contributors.
+- name: help wanted
+  color: 67E8F9
+  description: Maintainers would welcome community help.
+- name: question
+  color: 8EA4BD
+  description: Usage question or clarification.
+- name: performance
+  color: C084FC
+  description: Startup time, subprocess count, or runtime efficiency.
+- name: linux
+  color: 34D399
+  description: Distribution-specific behavior or Linux platform support.
+- name: security
+  color: FBBF24
+  description: Safety model, permissions, command execution, or vulnerability handling.
+- name: dependencies
+  color: 0EA5E9
+  description: Python, package-manager, or GitHub Actions dependency updates.
+- name: testing
+  color: 93C5FD
+  description: Tests, fixtures, CI, or validation coverage.
+- name: release
+  color: FDE68A
+  description: Versioning, packaging, changelog, release notes, or publishing.
+- name: packaging
+  color: 60A5FA
+  description: PyPI, wheel, sdist, metadata, or entry-point behavior.
 - name: bootstrap
   color: 67E8F9
   description: Inventory, profiles, install plans, or command UX.
 - name: catalog
   color: 34D399
-  description: Tool specs, package mappings, or bootstrap plugins.
+  description: Tool specs, package mappings, dependencies, or bootstrap plugins.
+- name: repair
+  color: FBBF24
+  description: Repair recommendations, PATH analysis, or health-state behavior.
 - name: exporters
   color: 8EA4BD
-  description: JSON, HTML, Markdown, or legacy health output.
-- name: docs
-  color: B7F7E0
-  description: Documentation, README, or release notes.
+  description: JSON, HTML, Markdown, PDF, or legacy health output.
 - name: branding
   color: 0EA5E9
-  description: Logo, assets, visual identity, or screenshots.
-- name: security
-  color: FBBF24
-  description: Safety model, permissions, or non-destructive behavior.
-- name: needs-triage
+  description: Logo, screenshots, social preview, or visual identity.
+- name: breaking
+  color: B91C1C
+  description: Backward-incompatible behavior or output changes.
+- name: needs reproduction
+  color: FCD34D
+  description: Maintainers need a minimal reproduction.
+- name: needs triage
   color: 94A3B8
   description: Needs maintainer review.
-- name: good-first-issue
-  color: A7F3D0
-  description: Scoped contribution suitable for first-time contributors.
+- name: duplicate
+  color: CBD5E1
+  description: This issue or pull request already exists.
+- name: invalid
+  color: CBD5E1
+  description: Not actionable as filed.
+- name: wontfix
+  color: 64748B
+  description: Outside project scope or intentionally declined.

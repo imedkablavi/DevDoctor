@@ -37,3 +37,7 @@ DevDoctor does not require a mouse. Commands that can change the system use term
 ## Reduced Risk
 
 Inventory commands are read-only. Install, update, uninstall, cache-clean, and self-update operations require `--apply`.
+
+## Screenshots
+
+Screenshots and GIFs should preserve readable contrast, avoid tiny text, and include `--no-color` captures when documenting machine-readable or CI-oriented workflows.

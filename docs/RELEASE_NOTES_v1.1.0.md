@@ -35,6 +35,8 @@ Repair recommendations are intentionally conservative. DevDoctor prints shell ex
 
 ## Upgrade
 
+After v1.1.0 is published to PyPI:
+
 ```bash
 python -m pip install --upgrade devdoctor
 devdoctor --version
@@ -51,6 +53,8 @@ ruff check .
 pytest
 python -m devdoctor --quiet
 python -m devdoctor --json | python -m json.tool
+python -m devdoctor search docker --no-color
+python -m devdoctor repair docker --no-color
 python -m build
 python -m twine check dist/*
 ```

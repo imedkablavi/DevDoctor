@@ -31,6 +31,7 @@ python -m pip install --upgrade devdoctor
 - [ ] `ruff format --check .`
 - [ ] `ruff check .`
 - [ ] `pytest`
+- [ ] `python -m devdoctor --version`
 - [ ] `python -m devdoctor --quiet`
 - [ ] `python -m devdoctor --no-color --quiet`
 - [ ] `python -m devdoctor --json | python -m json.tool`
@@ -43,3 +44,10 @@ python -m pip install --upgrade devdoctor
 ## Security Notes
 
 DevDoctor does not execute install, update, uninstall, cache, or self-update commands without `--apply`.
+
+## Artifacts
+
+- Source distribution: `devdoctor-<version>.tar.gz`
+- Wheel: `devdoctor-<version>-py3-none-any.whl`
+
+Run `python -m twine check dist/*` before publishing artifacts.

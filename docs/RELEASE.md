@@ -8,6 +8,7 @@ This checklist is for maintainers cutting a DevDoctor release.
 - Update `CHANGELOG.md`.
 - Update the release notes for the new version.
 - Check README commands, asset paths, and documentation links.
+- Confirm the target PyPI project is controlled by maintainers before publishing.
 - Run validation from a clean checkout.
 
 ## Validation
@@ -30,7 +31,7 @@ python -m twine check dist/*
 
 - Push the release branch and wait for CI.
 - Create the GitHub release using `.github/RELEASE_TEMPLATE.md`.
-- Publish the package to PyPI.
+- Publish the package to PyPI only after confirming project ownership.
 - Verify installation in a temporary virtual environment:
 
 ```bash

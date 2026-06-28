@@ -67,6 +67,8 @@ app = typer.Typer(
         "  devdoctor\n"
         "  devdoctor check --profile devops\n"
         "  devdoctor install git docker --dry-run\n"
+        "  devdoctor repair docker\n"
+        "  devdoctor search docker\n"
         "  devdoctor list profiles\n"
         "  devdoctor export json --output inventory.json"
     ),
@@ -378,7 +380,7 @@ def repair(
         typer.Option("--no-color", help="Disable terminal colors."),
     ] = False,
 ) -> None:
-    """Show real repair suggestions for broken local tool installations."""
+    """Show real repair suggestions for selected tools."""
 
     console = create_console(no_color=no_color)
     inventory = _inventory_for(profile_id=profile, category_name=None, tool_ids=tuple(tools or ()))

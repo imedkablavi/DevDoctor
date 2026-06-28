@@ -11,6 +11,8 @@ DevDoctor uses a calm workstation-bootstrap identity: dark terminal surfaces, cy
 - Favicon: `assets/brand/favicon.svg`
 - Favicon PNG: `assets/brand/favicon.png`
 - GitHub social banner: `assets/brand/github-social-banner.png`
+- Terminal preview: `assets/screenshots/terminal-preview.png`
+- Demo GIF: `assets/screenshots/devdoctor-demo.gif`
 
 ## Color Palette
 
@@ -49,3 +51,4 @@ DevDoctor sounds direct and operational.
 - Always show exact commands before system changes.
 - Do not imply a command ran unless DevDoctor actually executed it.
 - Do not invent download sizes, latest versions, or package ownership data.
+- Screenshots and demo recordings must be generated from real DevDoctor output.

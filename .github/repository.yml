@@ -17,9 +17,10 @@ topics:
   - python
   - developer-tools
   - bootstrap
+  - repair
   - package-manager
+  - workstation
+  - dev-environment
   - devops
   - diagnostics
-  - repair
-  - workstation
   - open-source

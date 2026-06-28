@@ -5,6 +5,22 @@ All notable changes to DevDoctor are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Community files for contributing, support, security, code of conduct, roadmap, migration index, and release process.
+- CLI reference, examples, screenshot regeneration notes, and release-readiness report.
+- Real terminal preview assets generated from DevDoctor command output.
+- GitHub issue templates for documentation requests, performance issues, and questions.
+- Tag-based GitHub release workflow that builds and attaches distribution artifacts.
+- Repository metadata tests for package version consistency and local Markdown links.
+
+### Changed
+
+- README installation wording now distinguishes GitHub/source installation from PyPI installation after maintainers publish v1.1.0.
+- GitHub labels, pull request template, release template, repository topics, and release checklist are more complete.
+
 ## [1.1.0] - 2026-06-28
 
 ### Added

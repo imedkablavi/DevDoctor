@@ -2,6 +2,15 @@
 
 Describe the change and the user-visible impact.
 
+## Scope
+
+- [ ] Bug fix
+- [ ] Documentation
+- [ ] Catalog/package mapping
+- [ ] Repair or PATH analysis
+- [ ] Packaging/release
+- [ ] Other:
+
 ## User Experience
 
 - [ ] Terminal output remains readable in small terminals.
@@ -15,7 +24,16 @@ Describe the change and the user-visible impact.
 - [ ] `pytest`
 - [ ] `python -m devdoctor --quiet`
 - [ ] `python -m devdoctor --json | python -m json.tool`
+- [ ] `python -m devdoctor search docker --no-color`
+- [ ] `python -m devdoctor repair docker --no-color`
 - [ ] `python -m devdoctor list profiles --no-color`
+
+## Security
+
+- [ ] No new `shell=True` usage.
+- [ ] No scan command mutates the system.
+- [ ] Mutating commands still require `--apply`.
+- [ ] Logs do not include secrets or unbounded command output.
 
 ## Checklist
 

@@ -18,6 +18,7 @@ keywords = [
   "rich",
   "developer-tools",
   "bootstrap",
+  "repair",
   "package-manager",
   "diagnostics",
   "devops",
@@ -33,6 +34,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development",
   "Topic :: System :: Systems Administration",
   "Typing :: Typed",
@@ -58,6 +60,7 @@ Repository = "https://github.com/imedkablavi/DevDoctor"
 Issues = "https://github.com/imedkablavi/DevDoctor/issues"
 Documentation = "https://github.com/imedkablavi/DevDoctor/tree/main/docs"
 Changelog = "https://github.com/imedkablavi/DevDoctor/blob/main/CHANGELOG.md"
+Security = "https://github.com/imedkablavi/DevDoctor/security/policy"
 
 [project.scripts]
 devdoctor = "devdoctor.cli:app"
