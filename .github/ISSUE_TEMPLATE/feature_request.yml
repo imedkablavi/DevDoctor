@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest a new check, exporter, integration, workflow, or design improvement.
+description: Suggest a catalog entry, package manager, profile, exporter, workflow, or design improvement.
 title: "feature: "
 labels: ["enhancement", "needs-triage"]
 body:
@@ -7,7 +7,7 @@ body:
     id: problem
     attributes:
       label: Problem
-      description: What developer workflow or diagnosis gap should this solve?
+      description: What workstation setup or repair gap should this solve?
     validations:
       required: true
   - type: textarea
@@ -22,10 +22,12 @@ body:
     attributes:
       label: Area
       options:
-        - Dashboard UX
-        - Check/plugin
+        - Catalog tool
+        - Package manager
+        - Profile
+        - Plugin
         - Exporter
-        - Package manager guidance
+        - Command UX
         - Documentation
         - Branding
         - CI/release
@@ -47,5 +49,5 @@ body:
       options:
         - label: The feature can run without root privileges.
           required: true
-        - label: The feature does not perform destructive operations.
+        - label: The feature previews system-changing operations before execution.
           required: true

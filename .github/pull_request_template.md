@@ -5,22 +5,23 @@ Describe the change and the user-visible impact.
 ## User Experience
 
 - [ ] Terminal output remains readable in small terminals.
-- [ ] Dashboard changes preserve keyboard-only navigation.
-- [ ] No-color or classic script modes remain usable where applicable.
+- [ ] No-color and quiet modes remain usable where applicable.
+- [ ] Machine-readable output is not routed through Rich formatting.
 
 ## Validation
 
 - [ ] `ruff format --check .`
 - [ ] `ruff check .`
 - [ ] `pytest`
-- [ ] `python -m devdoctor --classic --quiet --network-timeout 1`
-- [ ] `python -m devdoctor --json --network-timeout 1 | python -m json.tool`
+- [ ] `python -m devdoctor --quiet`
+- [ ] `python -m devdoctor --json | python -m json.tool`
+- [ ] `python -m devdoctor list profiles --no-color`
 
 ## Checklist
 
-- [ ] Checks are isolated and cannot crash the full report.
-- [ ] New warnings or failures include actionable recommendations.
+- [ ] Probes are isolated and cannot crash the full inventory.
+- [ ] New missing or broken states include actionable commands or repair text.
 - [ ] User-facing output is accurate and does not claim unsupported behavior.
-- [ ] Install, Auto Fix, and cleanup actions do not execute automatically.
+- [ ] System-changing actions require `--apply`.
 - [ ] Brand assets or UI colors follow `docs/BRAND.md`.
 - [ ] Documentation is updated when behavior changes.

@@ -1,28 +1,39 @@
 # Accessibility
 
-DevDoctor is designed for keyboard-first terminal use across common Linux terminals, tmux sessions, and non-interactive shells.
+DevDoctor is designed for plain terminal use, non-interactive shells, tmux sessions, and CI logs.
 
 ## Terminal Sizes
 
-- Small terminals use single-column dashboard card grids.
-- Medium terminals use two-column card grids.
-- Wide terminals use three-column card grids where the content benefits from it.
-- Non-interactive shells can use `--classic`, `--quiet`, `--json`, or file export options.
+- Narrow terminals receive folded command and path columns.
+- Wide terminals show host context, category tables, and install plans with more breathing room.
+- Machine-readable output should use `--json` or `export json`.
+- Script output should use `--quiet`.
 
 ## Color
 
-- The dashboard uses Textual's terminal color negotiation.
-- The classic Rich report uses Rich's automatic color detection.
-- `--no-color` disables color for classic and script output:
+Rich chooses the best available color mode automatically.
 
 ```bash
-devdoctor --classic --no-color
+devdoctor --no-color
+devdoctor check --profile devops --no-color
 ```
 
-## Keyboard
+`--no-color` is supported by the default command and primary subcommands.
 
-Every primary dashboard workflow is reachable from the keyboard. The shortcut map is listed in [DASHBOARD.md](DASHBOARD.md).
+## Unicode
+
+Terminal output uses a small set of status symbols:
+
+- `✓` installed
+- `✗` missing
+- `!` broken or needs repair
+
+Use JSON output when symbols are not appropriate for the consuming environment.
+
+## Keyboard and Interaction
+
+DevDoctor does not require a mouse. Commands that can change the system use terminal confirmation prompts unless `--yes` is provided explicitly.
 
 ## Reduced Risk
 
-Install and cleanup workflows are preview-only. DevDoctor never automatically runs privileged or destructive commands.
+Inventory commands are read-only. Install, update, uninstall, cache-clean, and self-update operations require `--apply`.

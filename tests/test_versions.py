@@ -14,6 +14,12 @@ from devdoctor.utils import parse_version
         ('openjdk version "21.0.3" 2024-04-16', "21.0.3"),
         ("pnpm 9.4.0", "9.4.0"),
         ("go version go1.22.4 linux/amd64", "1.22.4"),
+        (
+            "GNU Wget2 2.2.1 - multithreaded downloader\n"
+            "+digest +https +ssl/gnutls +ipv6\n"
+            "License GPLv3+",
+            "2.2.1",
+        ),
     ],
 )
 def test_parse_version_common_outputs(output: str, expected: str) -> None:

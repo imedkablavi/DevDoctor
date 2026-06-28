@@ -1,6 +1,6 @@
 repository:
   name: DevDoctor
-  description: "Interactive Linux workstation health dashboard for developers and DevOps engineers."
+  description: "Bootstrap and repair Linux developer workstations from a real local inventory."
   homepage: "https://github.com/imedkablavi/DevDoctor"
   private: false
   has_issues: true
@@ -13,12 +13,12 @@ topics:
   - linux
   - cli
   - terminal
-  - textual
   - rich
   - python
   - developer-tools
+  - bootstrap
+  - package-manager
   - devops
   - diagnostics
   - workstation
-  - health-check
   - open-source

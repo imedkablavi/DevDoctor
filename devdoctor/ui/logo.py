@@ -19,13 +19,13 @@ def banner(version: str) -> Panel:
 
     body = Text()
     body.append_text(title)
-    body.append("\nDiagnose your Linux development environment in seconds.", style="tagline")
-    body.append("\nchecks  -  exports  -  plugins  -  dashboard", style="muted")
+    body.append("\nPrepare and repair Linux developer workstations.", style="tagline")
+    body.append("\ninventory  -  install plans  -  profiles  -  exports", style="muted")
     return Panel(
         Align.center(body),
         border_style="bright_cyan",
         box=box.ROUNDED,
         padding=(1, 2),
-        title="Workstation Health",
+        title="Workstation Bootstrap",
         subtitle="devdoctor",
     )

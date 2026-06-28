@@ -4,15 +4,15 @@
 - name: enhancement
   color: 22D3EE
   description: New or improved behavior.
-- name: dashboard
+- name: bootstrap
   color: 67E8F9
-  description: Textual dashboard, terminal UI, or interaction work.
-- name: checks
+  description: Inventory, profiles, install plans, or command UX.
+- name: catalog
   color: 34D399
-  description: Health checks or plugin registry work.
+  description: Tool specs, package mappings, or bootstrap plugins.
 - name: exporters
   color: 8EA4BD
-  description: JSON, HTML, Markdown, PDF, or clipboard output.
+  description: JSON, HTML, Markdown, or legacy health output.
 - name: docs
   color: B7F7E0
   description: Documentation, README, or release notes.
@@ -28,4 +28,3 @@
 - name: good-first-issue
   color: A7F3D0
   description: Scoped contribution suitable for first-time contributors.
-

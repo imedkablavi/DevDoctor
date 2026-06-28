@@ -1,6 +1,6 @@
 # Brand System
 
-DevDoctor uses a calm, diagnostic visual system: dark workstation surfaces, cyan diagnostic light, and green recovery states.
+DevDoctor uses a calm workstation-bootstrap identity: dark terminal surfaces, cyan diagnostics, green ready states, amber repair states, and rose missing states.
 
 ## Assets
 
@@ -11,44 +11,41 @@ DevDoctor uses a calm, diagnostic visual system: dark workstation surfaces, cyan
 - Favicon: `assets/brand/favicon.svg`
 - Favicon PNG: `assets/brand/favicon.png`
 - GitHub social banner: `assets/brand/github-social-banner.png`
-- Animated preview: `assets/brand/devdoctor-preview.gif`
 
 ## Color Palette
 
 | Token | Hex | Use |
 | --- | --- | --- |
-| Night | `#0B1020` | App background |
-| Panel | `#111827` | Cards and surfaces |
-| Panel Elevated | `#101A2E` | Health and modal surfaces |
-| Border | `#263A55` | Card borders |
+| Night | `#0B1020` | Background |
+| Panel | `#111827` | Terminal panels and report surfaces |
+| Border | `#263A55` | Table and panel borders |
 | Diagnostic Cyan | `#22D3EE` | Primary accent |
-| Glow Cyan | `#67E8F9` | Logo highlights and score emphasis |
-| Recovery Green | `#34D399` | Passing states |
-| Caution Amber | `#FBBF24` | Warning states |
-| Failure Rose | `#FB7185` | Failure states |
+| Glow Cyan | `#67E8F9` | Logo highlight |
+| Ready Green | `#34D399` | Installed states |
+| Repair Amber | `#FBBF24` | Broken or repairable states |
+| Missing Rose | `#FB7185` | Missing states |
 | Text | `#E5EDF7` | Primary text |
 | Muted | `#8EA4BD` | Secondary text |
 
 ## Typography
 
-- Product and docs: Inter, Noto Sans, or Segoe UI.
+- Product and docs: Inter, Noto Sans, Segoe UI, or the system UI font.
 - Terminal/code labels: JetBrains Mono, Noto Sans Mono, or the user's terminal monospace.
-- Terminal UI should not use viewport-scaled font sizes; rely on spacing, borders, and color hierarchy.
+- Do not scale terminal text with viewport width.
 
 ## Voice
 
-DevDoctor sounds direct and operational:
+DevDoctor sounds direct and operational.
 
-- Prefer: "Docker daemon is not reachable."
-- Avoid: "Critical threat detected."
-- Prefer: "Review Command."
-- Avoid: "Run magic fix."
+- Prefer: "Docker is missing. Install plan: sudo dnf install moby-engine."
+- Avoid: "Critical environment failure detected."
+- Prefer: "No changes made. Use --apply to execute commands."
+- Avoid: "Magic repair complete."
 
 ## Interface Rules
 
-- Health score is the primary visual anchor.
-- Prefer compact cards over dense tables in the dashboard.
-- Export and install actions must show exact file paths or commands.
-- Destructive or privileged actions are preview-only and require explicit user action outside automatic scans.
-- Use icons sparingly: `✓` pass, `⚠` warning, `✕` failure, `◆` brand mark.
-
+- Installed, missing, and broken counts are the primary visual anchors.
+- Use tables for comparable command data.
+- Always show exact commands before system changes.
+- Do not imply a command ran unless DevDoctor actually executed it.
+- Do not invent download sizes, latest versions, or package ownership data.

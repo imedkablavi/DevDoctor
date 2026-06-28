@@ -69,14 +69,16 @@ def parse_version(output: str) -> str | None:
     patterns = (
         r"(?i)\bversion\s+v?([0-9]+(?:\.[0-9A-Za-z][0-9A-Za-z.+-]*)*)",
         r"(?i)\bgo([0-9]+(?:\.[0-9A-Za-z][0-9A-Za-z.+-]*)*)",
-        r"(?i)\bv([0-9]+(?:\.[0-9A-Za-z][0-9A-Za-z.+-]*)*)",
+        r"(?i)\bv([0-9]+\.[0-9A-Za-z][0-9A-Za-z.+-]*)",
         r"\b([0-9]+(?:\.[0-9A-Za-z][0-9A-Za-z.+-]*){1,})\b",
     )
-    for pattern in patterns:
-        match = re.search(pattern, normalized)
-        if match:
-            return match.group(1)
-    return normalized.splitlines()[0].strip()[:80]
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    for candidate in (*lines[:3], normalized):
+        for pattern in patterns:
+            match = re.search(pattern, candidate)
+            if match:
+                return match.group(1)
+    return lines[0][:80]
 
 
 def format_bytes(value: int | float) -> str:

@@ -2,11 +2,12 @@
 
 ## Highlights
 
-- Interactive Textual dashboard with sidebar navigation, search, keyboard shortcuts, and background scans.
-- Linux workstation checks for system health, developer tools, containers, DNS, internet, and GitHub reachability.
-- Safe Auto Fix and Optimization pages that show exact commands without executing them.
-- JSON, HTML, Markdown, compact PDF, clipboard, and latest-report export workflows.
-- v1 brand system with logo, icon, favicon, GitHub banner, and terminal preview.
+- Bootstrap-first Linux workstation inventory.
+- Distro-aware install, update, uninstall, repair, and cache-clean command planning.
+- Built-in profiles for common developer roles.
+- JSON, Markdown, and standalone HTML inventory exports.
+- Bootstrap catalog plugin entry point group.
+- v1 brand system with logo, icon, favicon, and GitHub banner.
 
 ## Installation
 
@@ -16,22 +17,23 @@ python -m pip install --upgrade devdoctor
 
 ## Compatibility
 
-- Dashboard: `devdoctor`
-- Classic report: `devdoctor --classic`
+- Inventory: `devdoctor`
 - JSON: `devdoctor --json`
-- CI gate: `devdoctor --quiet --fail-under 75`
+- Profiles: `devdoctor list profiles`
+- Legacy health reports: `devdoctor health`
 
 ## Validation
 
 - [ ] `ruff format --check .`
 - [ ] `ruff check .`
 - [ ] `pytest`
-- [ ] `python -m devdoctor --classic --quiet --network-timeout 1`
-- [ ] `python -m devdoctor --classic --no-color --quiet --network-timeout 1`
-- [ ] `python -m devdoctor --json --network-timeout 1 | python -m json.tool`
+- [ ] `python -m devdoctor --quiet`
+- [ ] `python -m devdoctor --no-color --quiet`
+- [ ] `python -m devdoctor --json | python -m json.tool`
+- [ ] `python -m devdoctor list profiles --no-color`
 - [ ] `python -m build`
 - [ ] `python -m twine check dist/*`
 
 ## Security Notes
 
-DevDoctor does not execute install, Auto Fix, or cleanup commands automatically.
+DevDoctor does not execute install, update, uninstall, cache, or self-update commands without `--apply`.

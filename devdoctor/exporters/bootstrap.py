@@ -1,0 +1,279 @@
+"""Bootstrap inventory exporters."""
+
+from __future__ import annotations
+
+import html
+import json
+from pathlib import Path
+
+from devdoctor.bootstrap import BootstrapInventory, ToolDetection
+
+
+def render_bootstrap_json(inventory: BootstrapInventory) -> str:
+    """Render a bootstrap inventory as stable JSON."""
+
+    return json.dumps(inventory.to_dict(), indent=2, sort_keys=True)
+
+
+def write_bootstrap_json(inventory: BootstrapInventory, path: Path) -> Path:
+    """Write a bootstrap JSON inventory to disk."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_bootstrap_json(inventory) + "\n", encoding="utf-8")
+    return path
+
+
+def render_bootstrap_markdown(inventory: BootstrapInventory) -> str:
+    """Render a bootstrap inventory as Markdown."""
+
+    summary = inventory.to_dict()["summary"]
+    lines = [
+        "# DevDoctor Workstation Inventory",
+        "",
+        f"- Distribution: `{inventory.system.get('distribution', 'unknown')}`",
+        f"- Architecture: `{inventory.system.get('architecture', 'unknown')}`",
+        f"- Shell: `{inventory.system.get('shell', 'unknown')}`",
+        f"- Installed: `{summary['installed']}`",
+        f"- Missing: `{summary['missing']}`",
+        f"- Broken: `{summary['broken']}`",
+        "",
+        "## Tools",
+        "",
+    ]
+
+    for category, detections in inventory.categories().items():
+        lines.extend(
+            [
+                f"### {category.value}",
+                "",
+                "| Status | Tool | Version | Path | Install Plan |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+        )
+        for detection in detections:
+            lines.append(_markdown_tool_row(detection))
+        lines.append("")
+
+    missing_with_plans = [item for item in inventory.missing if item.install_plan is not None]
+    if missing_with_plans:
+        lines.extend(["## Install Plans", ""])
+        for detection in missing_with_plans:
+            plan = detection.install_plan
+            if plan is None:
+                continue
+            lines.append(f"- **{detection.spec.title}**: `{plan.command_text}`")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_bootstrap_markdown(inventory: BootstrapInventory, path: Path) -> Path:
+    """Write a bootstrap Markdown inventory to disk."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_bootstrap_markdown(inventory), encoding="utf-8")
+    return path
+
+
+def render_bootstrap_html(inventory: BootstrapInventory) -> str:
+    """Render a standalone bootstrap HTML inventory."""
+
+    summary = inventory.to_dict()["summary"]
+    sections: list[str] = []
+    for category, detections in inventory.categories().items():
+        rows = "\n".join(_html_tool_row(detection) for detection in detections)
+        sections.append(
+            f"""
+            <section>
+              <h2>{html.escape(category.value)}</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Tool</th>
+                    <th>Version</th>
+                    <th>Path</th>
+                    <th>Install plan</th>
+                  </tr>
+                </thead>
+                <tbody>{rows}</tbody>
+              </table>
+            </section>
+            """
+        )
+
+    raw_json = html.escape(render_bootstrap_json(inventory))
+    metric_cards = "\n".join(
+        (
+            _metric_card("Installed", str(summary["installed"])),
+            _metric_card("Missing", str(summary["missing"])),
+            _metric_card("Broken", str(summary["broken"])),
+            _metric_card("Total", str(summary["total"])),
+        )
+    )
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevDoctor Workstation Inventory</title>
+  <style>
+    :root {{
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --fg: #e5edf6;
+      --muted: #94a3b8;
+      --line: #263244;
+      --good: #34d399;
+      --bad: #fb7185;
+      --warn: #fbbf24;
+      --accent: #38bdf8;
+    }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 15px;
+      line-height: 1.5;
+      font-family: ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }}
+    h1 {{
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 6vw, 4rem);
+      line-height: 1;
+    }}
+    h2 {{
+      margin: 32px 0 12px;
+      color: var(--accent);
+      font-size: 1.05rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }}
+    p, .muted {{ color: var(--muted); }}
+    .summary {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin: 28px 0;
+    }}
+    .metric {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: rgba(255,255,255,.03);
+    }}
+    .metric strong {{
+      display: block;
+      font-size: 1.8rem;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    th, td {{
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-size: .8rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }}
+    code {{
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: .92em;
+    }}
+    .ok {{ color: var(--good); }}
+    .bad {{ color: var(--bad); }}
+    .warn {{ color: var(--warn); }}
+    details {{
+      margin-top: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }}
+    pre {{
+      overflow: auto;
+      white-space: pre-wrap;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DevDoctor</h1>
+    <p>Linux developer workstation inventory generated from local system data.</p>
+    <div class="summary">
+      {metric_cards}
+    </div>
+    {"".join(sections)}
+    <details>
+      <summary>Raw JSON</summary>
+      <pre>{raw_json}</pre>
+    </details>
+  </main>
+</body>
+</html>
+"""
+
+
+def write_bootstrap_html(inventory: BootstrapInventory, path: Path) -> Path:
+    """Write a standalone bootstrap HTML inventory to disk."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_bootstrap_html(inventory), encoding="utf-8")
+    return path
+
+
+def _markdown_tool_row(detection: ToolDetection) -> str:
+    status = _status_label(detection)
+    plan = detection.install_plan.command_text if detection.install_plan else ""
+    return (
+        f"| {status} | {_escape_markdown(detection.spec.title)} | "
+        f"{_escape_markdown(detection.version or '')} | "
+        f"{_escape_markdown(detection.executable_path or '')} | {_escape_markdown(plan)} |"
+    )
+
+
+def _html_tool_row(detection: ToolDetection) -> str:
+    status = _status_label(detection)
+    status_class = "ok" if detection.installed and not detection.broken_installation else "bad"
+    if detection.broken_installation:
+        status_class = "warn"
+    plan = detection.install_plan.command_text if detection.install_plan else ""
+    return (
+        "<tr>"
+        f'<td class="{status_class}">{html.escape(status)}</td>'
+        f"<td>{html.escape(detection.spec.title)}</td>"
+        f"<td><code>{html.escape(detection.version or '')}</code></td>"
+        f"<td><code>{html.escape(detection.executable_path or '')}</code></td>"
+        f"<td><code>{html.escape(plan)}</code></td>"
+        "</tr>"
+    )
+
+
+def _metric_card(label: str, value: str) -> str:
+    return f'<div class="metric"><span class="muted">{label}</span><strong>{value}</strong></div>'
+
+
+def _status_label(detection: ToolDetection) -> str:
+    if detection.broken_installation:
+        return "WARN"
+    if detection.installed:
+        return "OK"
+    return "MISSING"
+
+
+def _escape_markdown(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")

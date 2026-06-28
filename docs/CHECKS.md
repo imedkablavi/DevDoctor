@@ -1,54 +1,140 @@
-# Checks Reference
+# Checks and Catalog Reference
 
-Each check returns a typed `CheckResult` and is executed in isolation. Unexpected exceptions are converted into failed check results so a single probe cannot crash the full report.
+DevDoctor's default workflow is a bootstrap inventory. Each catalog entry is a typed `ToolSpec`; each probe returns a `ToolDetection`. A failed command probe is recorded as data and does not stop the rest of the inventory.
 
-Checks are registered through `CheckPlugin` metadata. The built-in registry preserves the original check order, and future third-party plugins can register through the `devdoctor.checks` entry point group.
+## Host Context
 
-## System
+DevDoctor detects host context from local OS files, environment variables, filesystem state, and safe commands:
 
-- Linux distribution: hostname, username, distro name, ID, ID-like family, version, support status, desktop/session hints, shell, terminal, primary package manager, battery, and temperature when available.
-- Kernel: release, version, architecture, and Python platform string.
-- CPU: model, logical cores, physical cores, current utilization, and load averages.
-- RAM: total memory, available memory, utilization, swap capacity, and swap utilization.
-- Disk: free, used, total, utilization, filesystem, device, and mountpoint for the user's home filesystem.
-- Uptime: boot time and elapsed uptime.
-- GPU: detected through `lspci` or `nvidia-smi` when available.
+- Linux distribution and ID-like family from `/etc/os-release`.
+- Architecture from the running OS.
+- Desktop and session hints from `XDG_CURRENT_DESKTOP`, `XDG_SESSION_DESKTOP`, `DESKTOP_SESSION`, and `XDG_SESSION_TYPE`.
+- Shell and terminal from the process environment.
+- Root state and sudo availability.
+- WSL, container, and virtualization signals.
+- PATH entries and missing PATH directories.
+- Installed package managers and their versions where available.
 
-## Development Tools
+## Tool Detection
 
-DevDoctor checks command availability, executable path, version output, and selected runtime health where applicable.
+For each tool DevDoctor records:
 
-- Git
-- Docker
-- Podman
-- Python
-- Node.js
-- npm
-- pnpm
-- Bun
-- Rust
+- installed state
+- executable name
+- executable path
+- parsed version
+- owning package where `dpkg`, `rpm`, or `pacman` can report it
+- existing configuration locations
+- official website
+- recommended version metadata when the catalog provides it
+- broken installation signals
+- permission issues
+- PATH issues
+- missing dependencies
+- package-manager install plan
+
+No value is fabricated. If a platform cannot report something reliably, the field is `null`, empty, or omitted from terminal output.
+
+## Built-in Categories
+
+- System
+- Programming Languages
+- Version Managers
+- Package Managers
+- Editors
+- Containers
+- Virtualization
+- Databases
+- Cloud CLIs
+- DevOps
+- AI
+- Security
+- Networking
+- Terminal Utilities
+- Build Systems
+- Package Registries
+- Mobile Development
+- Game Development
+- Compilers
+- Debuggers
+- Reverse Engineering
+- Monitoring
+- Shell Enhancements
+- Fonts
+- Git Utilities
+- SSH
+- GPG
+- System Services
+
+## Package Managers
+
+The install planner can use detected managers from these families:
+
+- APT
+- DNF
+- rpm-ostree
+- Pacman
+- yay
+- paru
+- Zypper
+- XBPS
+- APK
+- Nix
+- Homebrew
+- Flatpak
+- Snap
 - Cargo
 - Go
-- Java
-- GitHub CLI
-- kubectl
-- Helm
-- Terraform
+- pip
+- pipx
+- npm
+- pnpm
+- Yarn
+- RubyGems
+- Composer
+- Rustup
+- Flutter
+- mise
+- asdf
 
-Git and Python are treated as essential for the health score. Most other tools are warnings when missing because their importance depends on the user's project stack.
+Install plans include the command, a dry-run command when the manager supports one, rollback command when known, verification command, and risk label.
 
-## Network
+## Profiles
 
-- Internet connectivity through outbound TCP probes.
-- DNS resolution for GitHub, PyPI, and npm registry hosts.
-- GitHub reachability over HTTPS.
+Built-in profiles are intentionally narrow:
 
-## Scoring
+- `general`
+- `frontend`
+- `backend`
+- `python`
+- `node`
+- `rust`
+- `go`
+- `java`
+- `flutter`
+- `android`
+- `data-science`
+- `ai`
+- `security`
+- `devops`
+- `cloud`
+- `game`
 
-Score starts at 100:
+Profiles select tool IDs from the same catalog used by `devdoctor check`, `install`, and `verify`.
 
-- Failed checks subtract `6 + weight * 4`.
-- Warning checks subtract `weight * 2`.
-- Checks with weight `0` are informational.
+## Plugin Catalog
 
-The score is clamped to the inclusive range `0..100`.
+External packages can register bootstrap tools through the `devdoctor.bootstrap_tools` entry point group. An entry point may return one `ToolSpec` or an iterable of `ToolSpec` instances.
+
+```toml
+[project.entry-points."devdoctor.bootstrap_tools"]
+workstation_tools = "example_package.devdoctor:get_tools"
+```
+
+Plugin catalog entries must be local, fast, and safe to evaluate without root privileges.
+
+## Legacy Health Checks
+
+`devdoctor health` keeps the older `CheckResult` and `HealthReport` model for compatibility. Those checks still cover system information, developer tools, network connectivity, DNS, GitHub reachability, scoring, and JSON/HTML/Markdown/PDF exporters.
+
+The legacy health score is not used by the default bootstrap workflow.

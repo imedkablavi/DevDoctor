@@ -1,40 +1,47 @@
 <p align="center">
-  <img src="assets/brand/github-social-banner.png" alt="DevDoctor - Diagnose your dev environment in seconds" width="100%">
+  <img src="assets/brand/github-social-banner.png" alt="DevDoctor" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/imedkablavi/DevDoctor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imedkablavi/DevDoctor/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://pypi.org/project/devdoctor/"><img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22D3EE"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-22D3EE">
+  <img alt="Linux" src="https://img.shields.io/badge/platform-Linux-34D399">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-8EA4BD"></a>
-  <a href="docs/DASHBOARD.md"><img alt="Textual dashboard" src="https://img.shields.io/badge/ui-Textual-67E8F9"></a>
 </p>
 
 <h1 align="center">DevDoctor</h1>
 
 <p align="center">
-  <strong>Diagnose your Linux development environment in seconds.</strong>
+  <strong>Bootstrap and repair Linux developer workstations.</strong>
 </p>
 
-DevDoctor is a local CLI for checking a developer workstation before the environment wastes your afternoon. It reports system health, common development tools, containers, package managers, DNS, internet reachability, GitHub access, and exportable reports.
+DevDoctor inventories a Linux workstation, detects developer tools, and shows the safest package-manager commands needed to install, update, verify, repair, or remove them.
 
-It is intentionally conservative: scans run as a regular user, install and cleanup actions are shown as commands to review, and one failed probe cannot stop the full report.
+It is not a system monitor and it is not a scorecard. The default output is a plain terminal report built from local system data: distribution, package managers, shell, desktop/session, virtualization, PATH, language runtimes, container tooling, cloud CLIs, databases, security tools, build systems, and common terminal utilities.
 
-## Preview
+DevDoctor does not run privileged commands during a scan. Commands that change the system are shown first and only run when you pass `--apply` and confirm them.
 
-<p align="center">
-  <img src="assets/brand/devdoctor-preview.gif" alt="DevDoctor dashboard preview" width="860">
-</p>
+## Terminal Preview
 
 ```text
-◆ DevDoctor
-workstation health
+$ devdoctor check --profile devops --missing
 
-Health Overview
-80/100  Overall workstation health
-████████████████████████░░░░░░
-✓ 18 passed   ⚠ 8 warnings   ✕ 0 failed
+DevDoctor  v1.0.0                         4 installed  7 missing  0 broken
+Linux developer workstation bootstrap
 
-Ctrl+R refresh  •  / search  •  Ctrl+E export  •  Ctrl+F auto fix
+Host
+OS             Fedora Linux 42        Arch        x86_64
+Shell          bash                   Desktop     GNOME
+Session        wayland                Terminal    xterm-256color
+Managers       dnf, flatpak, pip      PATH issues 0
+
+Containers
+✗ Docker                                      sudo dnf install moby-engine
+
+DevOps
+✗ kubectl                                     sudo dnf install kubernetes-client
+✗ Helm                                        sudo dnf install helm
+✗ Terraform                                   sudo dnf install terraform
 ```
 
 ## Install
@@ -57,111 +64,132 @@ python -m pip install -e ".[dev]"
 
 ```bash
 devdoctor
+devdoctor check --profile general
+devdoctor check git docker node
+devdoctor --json | python -m json.tool
 ```
 
-The default command opens the dashboard when stdout is attached to an interactive terminal.
+Preview installation work without changing the machine:
 
 ```bash
-devdoctor --classic
-devdoctor --quiet --fail-under 75
-devdoctor --json --network-timeout 2
+devdoctor install git docker --dry-run
+devdoctor install --profile devops
 ```
 
-Export reports:
+Run a plan only after review:
 
 ```bash
-devdoctor --json-file report.json
-devdoctor --html-file report.html
-devdoctor --markdown-file report.md
-devdoctor --pdf-file report.pdf
+devdoctor install --profile frontend --apply
 ```
 
-## What It Checks
+## Commands
 
-| Area | Checks |
+| Command | Purpose |
 | --- | --- |
-| System | Distribution, kernel, architecture, CPU usage, RAM, swap, disk, filesystem, uptime, GPU, session, shell, battery and temperature when available |
-| Tools | Git, Python, Docker, Podman, Node.js, npm, pnpm, Bun, Rust, Cargo, Go, Java, GitHub CLI, kubectl, Helm, Terraform |
-| Network | Internet connectivity, DNS resolution, GitHub HTTPS reachability |
-| Packages | APT, DNF, Pacman, yay, paru, RPM, Flatpak, Snap, Homebrew, Cargo, pip, npm, pnpm, Bun |
-| Reports | JSON, HTML, Markdown, compact PDF, clipboard copy, latest-report cache |
+| `devdoctor` | Full workstation inventory. |
+| `devdoctor check [tools...]` | Inspect selected tools, a category, or a profile. |
+| `devdoctor install [tools...]` | Preview or run install plans. |
+| `devdoctor repair [tools...]` | Show repair suggestions for broken commands in `PATH`. |
+| `devdoctor verify [tools...]` | Exit non-zero when selected tools are missing or broken. |
+| `devdoctor search QUERY` | Search the local tool catalog. |
+| `devdoctor list profiles` | Show built-in bootstrap profiles. |
+| `devdoctor list tools` | Show catalog tool IDs without probing the system. |
+| `devdoctor export json` | Export inventory JSON. |
+| `devdoctor export markdown` | Export inventory Markdown. |
+| `devdoctor update` | Preview package-manager update commands. |
+| `devdoctor uninstall TOOL` | Preview rollback commands for catalog tools. |
+| `devdoctor cache clean` | Preview supported package cache cleanup commands. |
+| `devdoctor self-update` | Preview a Python package self-update command. |
+| `devdoctor health` | Run the legacy non-interactive health report and exporters. |
 
-## Why Use It
+## Profiles
 
-DevDoctor catches the boring failures that slow down builds and onboarding:
+Profiles keep setup focused. They do not install every tool in a category.
 
-- missing or misconfigured tools
-- stopped container daemons
-- broken DNS or GitHub reachability
-- low disk space
-- unclear package-manager state
-- inconsistent workstation setup before running CI-like checks locally
+```bash
+devdoctor list profiles
+devdoctor check --profile python
+devdoctor install --profile cloud --dry-run
+devdoctor verify --profile general
+```
 
-It does not collect telemetry, scan networks, install packages, or delete files.
+Built-in profiles include `general`, `frontend`, `backend`, `python`, `node`, `rust`, `go`, `java`, `flutter`, `android`, `data-science`, `ai`, `security`, `devops`, `cloud`, and `game`.
 
-## Dashboard
+## What DevDoctor Detects
 
-The dashboard uses Textual and is built around keyboard-first navigation.
-
-| Shortcut | Action |
+| Area | Examples |
 | --- | --- |
-| `/` | Focus search |
-| `Tab` | Move to the next page |
-| `Ctrl+R` | Refresh checks |
-| `Ctrl+E` | Open Reports |
-| `Ctrl+F` | Open Auto Fix |
-| `Esc` | Go back |
-| `Q` | Quit |
+| System | Distribution, architecture, desktop, session type, shell, terminal, WSL, containers, virtualization, sudo availability, PATH issues. |
+| Package managers | APT, DNF, rpm-ostree, Pacman, yay, paru, Zypper, XBPS, APK, Nix, Flatpak, Snap, Homebrew, Cargo, Go, pip, pipx, npm, pnpm, Yarn, Gem, Composer, Rustup, Flutter, mise, asdf. |
+| Languages | Python, Node.js, Bun, Rust, Go, Java, .NET, PHP, Ruby. |
+| Editors | Visual Studio Code, Vim, Neovim. |
+| Containers and DevOps | Docker, Podman, Distrobox, kubectl, Helm, Terraform, Ansible. |
+| Cloud CLIs | GitHub CLI, AWS CLI, Azure CLI, Google Cloud CLI. |
+| Data and services | PostgreSQL client, MySQL client, SQLite, Redis CLI, systemd. |
+| Security and debugging | OpenSSH, GnuPG, UFW, Nmap, GDB, strace, radare2. |
+| Terminal and build tools | curl, wget, jq, ripgrep, fd, fzf, Starship, GCC, Clang, Make, CMake, Ninja. |
+| Mobile, AI, and games | Android Debug Bridge, Flutter, Ollama, CUDA compiler, Godot. |
 
-The dashboard is documented in [docs/DASHBOARD.md](docs/DASHBOARD.md). Script and no-color usage is documented in [docs/USAGE.md](docs/USAGE.md).
+For each tool DevDoctor records installed state, executable path, parsed version, owning package where the platform can report it, existing configuration locations, broken local installation signals, missing dependencies, and a distro-aware install plan when one is available.
+
+## Export Formats
+
+```bash
+devdoctor --json > inventory.json
+devdoctor --json-file inventory.json
+devdoctor --markdown-file inventory.md
+devdoctor --html-file inventory.html
+devdoctor export json --output inventory.json
+devdoctor export markdown --output inventory.md
+```
+
+The JSON export is the stable machine-readable format. Markdown is meant for issues, handoffs, and onboarding notes. HTML is a standalone local report with the raw JSON embedded.
+
+## Safety Model
+
+- Scans run as the current user.
+- DevDoctor never uses `shell=True`.
+- Install, update, uninstall, cache, and self-update commands are previewed first.
+- `--apply` is required before any command is executed.
+- Unless `--yes` is passed, each command still asks for confirmation.
+- Executed operations are logged under the user state directory, usually `~/.local/state/devdoctor/operations.log`.
+- DevDoctor does not store secrets, tokens, package-manager credentials, or shell history.
 
 ## Supported Distributions
 
-DevDoctor has distro-aware install guidance for:
+DevDoctor has distro-aware install planning for Ubuntu, Debian, Fedora, Bazzite, Arch, Manjaro, Pop!_OS, and Linux Mint. It also includes package-manager support for openSUSE, Void Linux, Alpine Linux, Nix, Homebrew on Linux, Flatpak, Snap, and common language package managers.
 
-- Ubuntu
-- Debian
-- Fedora
-- Bazzite
-- Arch
-- Manjaro
-- Pop!_OS
-- Linux Mint
-
-Other Linux distributions can still run the checks. Package install suggestions may be less specific.
-
-## Reports
-
-JSON is the complete machine-readable format. HTML is a standalone visual report. Markdown is useful for issues and handoffs. The PDF exporter is dependency-free and intentionally compact.
-
-```bash
-devdoctor --json
-devdoctor --html-file devdoctor-report.html
-devdoctor --markdown-file devdoctor-report.md
-devdoctor --pdf-file devdoctor-report.pdf
-```
+Other Linux distributions can still run the inventory. Install plans appear when a supported package manager is detected and the catalog has a package mapping for the tool.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  CLI[Typer CLI] --> Doctor[DevDoctor Orchestrator]
-  Dashboard[Textual Dashboard] --> Doctor
-  Doctor --> Registry[Check Plugin Registry]
-  Registry --> Checks[Isolated Checks]
-  Checks --> Result[CheckResult]
-  Result --> Report[HealthReport + Score]
-  Report --> Exporters[JSON / HTML / Markdown / PDF]
-  Report --> UI[Rich and Textual UI]
+  CLI[Typer CLI] --> Catalog[Tool Catalog]
+  Catalog --> Builtins[Built-in ToolSpec entries]
+  Catalog --> Plugins[devdoctor.bootstrap_tools entry points]
+  CLI --> Detector[Isolated Detectors]
+  Detector --> Inventory[BootstrapInventory]
+  Inventory --> Terminal[Rich Terminal Output]
+  Inventory --> Exporters[JSON / Markdown / HTML]
+  Inventory --> Planner[Install / Update / Repair Plans]
+  Planner --> Executor[Confirmed subprocess execution]
 ```
 
-Checks return typed `CheckResult` objects. The orchestrator catches unexpected exceptions per check, calculates a weighted score, and sends the same report model to the dashboard, classic Rich output, and exporters.
+The bootstrap layer is centered on `ToolSpec`, `ToolDetection`, `InstallPlan`, `BootstrapProfile`, and `BootstrapInventory`. Each detector is isolated, command execution is bounded, and unexpected command failures are converted into data instead of crashing the scan.
 
-## Plugins
+The legacy `devdoctor health` command keeps the older check/report model for users that still need health-style JSON, HTML, Markdown, or PDF reports. It is not the default workflow.
 
-Built-in checks are registered through `CheckPlugin` metadata. External packages can expose a zero-argument callable or a `CheckPlugin` through the `devdoctor.checks` entry point group.
+## Plugin Catalog
 
-Plugin checks should be fast, typed, non-destructive, and safe to run without root privileges. The checks reference is in [docs/CHECKS.md](docs/CHECKS.md).
+Third-party packages can add bootstrap tools with the `devdoctor.bootstrap_tools` entry point group. An entry point may return a `ToolSpec` or an iterable of `ToolSpec` instances.
+
+```toml
+[project.entry-points."devdoctor.bootstrap_tools"]
+mytools = "my_package.devdoctor:get_tools"
+```
+
+Plugin detectors should be fast, local, non-destructive, and safe to run without root privileges.
 
 ## Development
 
@@ -170,25 +198,38 @@ python -m pip install -e ".[dev]"
 ruff format --check .
 ruff check .
 pytest
-python -m devdoctor --classic --quiet --network-timeout 1
+python -m devdoctor --quiet
+python -m devdoctor --json | python -m json.tool
 ```
 
-When adding or changing a check, keep the result actionable and add focused tests. Dashboard changes should remain usable in small terminals and from the keyboard.
+When changing catalog entries, add or update tests for install-plan selection, version parsing, and profile coverage. When changing CLI output, verify both a narrow terminal and machine-readable JSON.
 
 ## Roadmap
 
-- Signed release artifacts
-- PyPI release automation
-- Shell environment checks for PATH, proxies, and version managers
-- Optional container runtime smoke checks
-- Third-party plugin examples
-- Homebrew, COPR, AUR, and distro packaging
+- More official package mappings for SUSE, Void, Alpine, Nix, and language managers.
+- External plugin examples.
+- Signed release artifacts and PyPI publication workflow.
+- Optional package-manager dry-run parsers for dependency and download-size reporting where the manager exposes real data.
+- Safer repair actions for common PATH, permission, symlink, and package-cache problems.
+
+## FAQ
+
+**Does DevDoctor install packages by default?**  
+No. Inventory and planning are read-only. Use `--apply` to execute a reviewed command.
+
+**Why not show a health score?**  
+A workstation is only "ready" relative to the project in front of you. DevDoctor shows concrete installed, missing, and broken tools instead of compressing that into a score.
+
+**Can I use it in CI or onboarding scripts?**  
+Yes. Use `devdoctor verify --profile general --quiet` or `devdoctor --json` depending on whether you need an exit code or structured data.
+
+**Does it support non-Linux systems?**  
+No. DevDoctor is intentionally Linux-first.
 
 ## Documentation
 
 - [Usage](docs/USAGE.md)
-- [Dashboard](docs/DASHBOARD.md)
-- [Checks reference](docs/CHECKS.md)
+- [Checks and catalog reference](docs/CHECKS.md)
 - [Accessibility](docs/ACCESSIBILITY.md)
 - [Brand system](docs/BRAND.md)
 - [Release process](docs/RELEASE.md)

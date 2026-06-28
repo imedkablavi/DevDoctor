@@ -17,3 +17,9 @@ def latest_report_path() -> Path:
     """Return the path used for the optional latest JSON report cache."""
 
     return state_dir() / "latest-report.json"
+
+
+def operation_log_path() -> Path:
+    """Return the append-only command operation log path."""
+
+    return state_dir() / "operations.log"

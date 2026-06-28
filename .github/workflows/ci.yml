@@ -37,5 +37,7 @@ jobs:
         run: pytest
 
       - name: Smoke test CLI
-        run: devdoctor --quiet --network-timeout 1
-
+        run: |
+          devdoctor --quiet
+          devdoctor check git --quiet
+          devdoctor --json | python -m json.tool >/tmp/devdoctor-inventory.json

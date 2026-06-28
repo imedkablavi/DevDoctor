@@ -1,128 +1,153 @@
 # Usage
 
-DevDoctor is designed to be useful both as an interactive terminal dashboard and in scripts.
+DevDoctor is a Linux workstation bootstrap CLI. The default command prints a local inventory and install plans; it does not open a dashboard and it does not calculate a health score.
 
-## Interactive Scan
+## Inventory
 
 ```bash
 devdoctor
+devdoctor check
+devdoctor check git docker node
+devdoctor check --profile devops
+devdoctor check --category cloud-clis
+devdoctor check --missing
 ```
 
-The default command opens the Textual dashboard when attached to an interactive terminal. It includes:
-
-- System information
-- Overall health score
-- Permanent sidebar navigation
-- Search
-- Tool cards and detail pages
-- Package-manager inventory with version and command hints
-- Optimization and Auto Fix command previews
-- JSON, HTML, Markdown, PDF, and clipboard report actions
-- Recommendations
-
-Use the classic Rich report explicitly:
+`--quiet` prints a compact summary for scripts:
 
 ```bash
-devdoctor --classic
+devdoctor --quiet
 ```
 
-## JSON Output
+```text
+installed=33 missing=31 broken=0 total=64
+```
+
+## JSON, Markdown, and HTML
 
 ```bash
 devdoctor --json
+devdoctor --json-file inventory.json
+devdoctor --markdown-file inventory.md
+devdoctor --html-file inventory.html
+devdoctor export json --output inventory.json
+devdoctor export markdown --output inventory.md
 ```
 
-This prints the complete report as JSON. Use this mode when piping output to tools.
+Raw JSON is written directly to stdout, so it is safe to pipe:
 
 ```bash
-devdoctor --json-file devdoctor-report.json
+devdoctor --json | python -m json.tool
 ```
 
-## HTML Output
+## Profiles
 
 ```bash
-devdoctor --html-file devdoctor-report.html
+devdoctor list profiles
+devdoctor profiles
+devdoctor profiles --json
 ```
 
-The HTML exporter creates a standalone report with embedded styles and raw JSON data.
-
-## Markdown and PDF Output
+Use profiles to focus the catalog:
 
 ```bash
-devdoctor --markdown-file devdoctor-report.md
-devdoctor --pdf-file devdoctor-report.pdf
+devdoctor check --profile python
+devdoctor install --profile frontend --dry-run
+devdoctor verify --profile general --quiet
 ```
 
-Markdown is intended for issues, pull requests, and handoffs. The PDF exporter is dependency-free and produces a compact summary; use JSON, HTML, or Markdown for full raw data.
+## Install Plans
 
-## Script Mode
+By default, `install` previews missing tools and prints package-manager commands without changing the system:
 
 ```bash
-devdoctor --quiet --fail-under 80
+devdoctor install git docker
+devdoctor install --profile devops
 ```
 
-`--quiet` prints a compact summary:
-
-```text
-score=92 passed=22 warnings=4 failed=0
-```
-
-`--fail-under` exits with status code `1` when the score is below the threshold.
-
-## Dashboard Shortcuts
-
-- `/`: focus global search.
-- `Tab`: switch to the next page.
-- `Ctrl+R`: refresh checks in the background.
-- `Ctrl+E`: open Reports.
-- `Ctrl+F`: open Auto Fix.
-- `Esc`: navigate back.
-- `Q`: quit.
-
-## Safety
-
-Install, Auto Fix, and Optimization actions show the exact command. DevDoctor does not execute package installation or cleanup commands automatically.
-
-## Accessibility
-
-DevDoctor supports small and wide terminals through responsive dashboard card grids. Classic output supports no-color mode:
+Run package-manager dry-run commands where supported:
 
 ```bash
-devdoctor --classic --no-color
+devdoctor install git docker --dry-run
 ```
 
-See [ACCESSIBILITY.md](ACCESSIBILITY.md) for details.
-
-## Network Timeout
+Execute a plan only after review:
 
 ```bash
-devdoctor --network-timeout 5
+devdoctor install git docker --apply
 ```
 
-The timeout applies to internet, DNS, and GitHub reachability checks.
-
-## Latest Report Cache
+Use `--yes` only in controlled scripts:
 
 ```bash
-devdoctor --save-latest
+devdoctor install --profile general --apply --yes
 ```
 
-This writes the latest JSON report to the platformdirs user state directory. On most Linux systems that is `~/.local/state/devdoctor/`.
+## Repair and Verification
 
-## Options
+```bash
+devdoctor repair
+devdoctor repair docker
+devdoctor verify --profile general
+devdoctor verify git python docker --quiet
+```
 
-| Option | Use |
-| --- | --- |
-| `--version` | Print the installed DevDoctor version. |
-| `--classic` | Use the Rich report instead of the dashboard. |
-| `--json` | Print the full report as JSON. |
-| `--json-file PATH` | Write a JSON report. |
-| `--html-file PATH` | Write a standalone HTML report. |
-| `--markdown-file PATH` | Write a Markdown report. |
-| `--pdf-file PATH` | Write a compact PDF report. |
-| `--save-latest` | Save the latest JSON report under the user state directory. |
-| `--quiet`, `-q` | Print only the compact status line. |
-| `--fail-under N` | Exit with code `1` when the score is below `N`. |
-| `--network-timeout SECONDS` | Set the timeout for network probes. |
-| `--no-progress` | Disable progress bars in classic output. |
-| `--no-color` | Disable color in classic and script output. |
+`verify` exits with status code `1` when any selected tool is missing or broken.
+
+Repair suggestions are derived from local evidence such as broken symlinks, non-executable files in `PATH`, missing dependencies, and package-manager ownership data when available.
+
+## Catalog Search and Lists
+
+```bash
+devdoctor search kubectl
+devdoctor list tools
+devdoctor list tools --category terminal-utilities
+devdoctor list categories
+```
+
+Tool IDs are stable command identifiers used by profiles and install plans.
+
+## Update, Uninstall, and Cache Commands
+
+These commands preview real package-manager operations. They execute only with `--apply`.
+
+```bash
+devdoctor update
+devdoctor update --apply
+
+devdoctor uninstall docker
+devdoctor uninstall docker --apply
+
+devdoctor cache clean
+devdoctor cache clean --apply
+
+devdoctor self-update
+devdoctor self-update --apply
+```
+
+All executed commands are run with `shell=False` and are logged to the platformdirs user state directory, usually `~/.local/state/devdoctor/operations.log`.
+
+## No Color
+
+```bash
+devdoctor --no-color
+devdoctor check --profile devops --no-color
+```
+
+No-color mode is useful in simple terminals, logs, and CI systems.
+
+## Legacy Health Report
+
+The old non-interactive health report remains available for users that need the previous check/export model:
+
+```bash
+devdoctor health
+devdoctor health --json
+devdoctor health --json-file health.json
+devdoctor health --html-file health.html
+devdoctor health --markdown-file health.md
+devdoctor health --pdf-file health.pdf
+devdoctor health --quiet --fail-under 80
+```
+
+The legacy command is not the default product workflow.
