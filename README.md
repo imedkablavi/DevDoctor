@@ -63,7 +63,16 @@ DevOps
 
 DevDoctor requires Python 3.11 or newer.
 
-From the GitHub repository:
+From PyPI:
+
+```bash
+python -m pip install --upgrade devdoctor-cli
+devdoctor --version
+```
+
+The Python distribution name is `devdoctor-cli`. The executable command is still `devdoctor`.
+
+From the GitHub repository before a PyPI release is published:
 
 ```bash
 python -m pip install "git+https://github.com/imedkablavi/DevDoctor.git"
@@ -77,10 +86,10 @@ cd DevDoctor
 python -m pip install -e ".[dev]"
 ```
 
-After maintainers publish v1.1.0 to PyPI, the package install command is:
+Future Homebrew tap command, after the tap is published:
 
 ```bash
-python -m pip install --upgrade devdoctor
+brew install imedkablavi/tap/devdoctor
 ```
 
 ## Quick Start
@@ -256,7 +265,8 @@ When changing catalog entries, add or update tests for install-plan selection, v
 
 - More official package mappings for SUSE, Void, Alpine, Nix, and language managers.
 - External plugin examples.
-- Signed release artifacts and PyPI publication workflow.
+- Signed release artifacts and PyPI trusted publishing workflow for `devdoctor-cli`.
+- Future Homebrew tap documentation and formula validation.
 - Optional package-manager dry-run parsers for dependency and download-size reporting where the manager exposes real data.
 - More repair checks for distro-specific package metadata and service managers.
 

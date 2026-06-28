@@ -2,6 +2,8 @@
 
 DevDoctor is a Linux CLI for workstation inventory, bootstrap planning, and repair guidance. Contributions should keep that scope tight: local evidence, safe command planning, clear terminal output, and no background services.
 
+The Python distribution name is `devdoctor-cli`; the import package and executable command are both `devdoctor`.
+
 ## Development Setup
 
 ```bash

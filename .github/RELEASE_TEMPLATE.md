@@ -14,7 +14,8 @@
 ## Installation
 
 ```bash
-python -m pip install --upgrade devdoctor
+python -m pip install --upgrade devdoctor-cli
+devdoctor --version
 ```
 
 ## Compatibility
@@ -25,6 +26,7 @@ python -m pip install --upgrade devdoctor
 - Search: `devdoctor search docker`
 - Repair suggestions: `devdoctor repair docker`
 - Legacy health reports: `devdoctor health`
+- Future Homebrew tap: `brew install imedkablavi/tap/devdoctor`
 
 ## Validation
 
@@ -47,7 +49,7 @@ DevDoctor does not execute install, update, uninstall, cache, or self-update com
 
 ## Artifacts
 
-- Source distribution: `devdoctor-<version>.tar.gz`
-- Wheel: `devdoctor-<version>-py3-none-any.whl`
+- Source distribution: `devdoctor_cli-<version>.tar.gz`
+- Wheel: `devdoctor_cli-<version>-py3-none-any.whl`
 
 Run `python -m twine check dist/*` before publishing artifacts.

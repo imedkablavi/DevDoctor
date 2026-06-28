@@ -41,10 +41,16 @@ jobs:
       - name: Validate distributions
         run: python -m twine check dist/*
 
+      - name: Validate wheel install
+        run: |
+          python -m venv /tmp/devdoctor-release-check
+          /tmp/devdoctor-release-check/bin/python -m pip install --find-links dist devdoctor-cli
+          /tmp/devdoctor-release-check/bin/devdoctor --version
+
       - name: Upload distribution artifact
         uses: actions/upload-artifact@v4
         with:
-          name: devdoctor-dist
+          name: devdoctor-cli-dist
           path: dist/*
 
       - name: Create GitHub release

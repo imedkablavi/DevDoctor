@@ -18,7 +18,8 @@ and this project uses semantic versioning.
 
 ### Changed
 
-- README installation wording now distinguishes GitHub/source installation from PyPI installation after maintainers publish v1.1.0.
+- Python distribution name changed from `devdoctor` to `devdoctor-cli`; the executable command remains `devdoctor`.
+- README installation wording now uses `devdoctor-cli` for PyPI and keeps source/editable install instructions separate.
 - GitHub labels, pull request template, release template, repository topics, and release checklist are more complete.
 
 ## [1.1.0] - 2026-06-28

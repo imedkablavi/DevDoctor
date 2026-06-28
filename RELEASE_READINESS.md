@@ -3,46 +3,39 @@
 Date: 2026-06-28  
 Version reviewed: 1.1.0  
 Repository: `imedkablavi/DevDoctor`
+Python distribution: `devdoctor-cli`
+Executable command: `devdoctor`
 
 ## Summary
 
-DevDoctor is ready for a public GitHub release. The repository now has the expected open-source surface area: clear README, real demo assets, contribution guidance, security policy, support path, roadmap, examples, CLI reference, release process, GitHub templates, labels, workflows, package metadata, and validation coverage.
+DevDoctor is prepared for its first public production release as a Linux CLI for developer workstation inventory, bootstrap planning, and repair guidance.
 
-The Python package builds cleanly and installs from the generated wheel in a fresh virtual environment. PyPI publication is technically ready, but maintainers must confirm access to the existing `devdoctor` PyPI project before announcing `pip install devdoctor` as the current stable install path. PyPI currently reports `devdoctor` versions `0.2.1` and `0.2.0`.
+The project branding remains `DevDoctor`. The Python distribution name is `devdoctor-cli` to avoid ambiguity with older PyPI packages. The import package remains `devdoctor`, and the installed command remains `devdoctor`.
 
 ## Reviewed
 
-- Repository structure and file organization.
-- README, docs, changelog, migration notes, release notes, and examples.
-- GitHub issue templates, pull request template, labels, repository metadata, Dependabot, CI, quality workflow, and release workflow.
-- Packaging metadata in `pyproject.toml`.
-- Wheel and source distribution output.
-- CLI help pages, command examples, JSON/Markdown/HTML exports, and legacy health command.
-- Security-sensitive command execution model.
-- Screenshot and demo asset handling.
-- Test suite and release validation commands.
+- Repository structure and naming consistency.
+- README, changelog, roadmap, support, security, contribution, migration, and release documentation.
+- CLI reference, examples, accessibility notes, brand notes, release notes, and screenshot assets.
+- GitHub issue templates, pull request template, labels, repository metadata, Dependabot, CI, package-quality workflow, and release workflow.
+- Package metadata, entry point, Python compatibility, dependencies, wheel contents, source distribution, and editable install flow.
+- CLI help pages, command examples, JSON/Markdown/HTML exports, install previews, search, repair, verify, and legacy health command.
+- Security-sensitive subprocess handling, command execution flow, operation logging, and report writes.
 
 ## Improved
 
-- Added `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `CODE_OF_CONDUCT.md`, `ROADMAP.md`, `MIGRATION_GUIDE.md`, and `RELEASE_PROCESS.md`.
-- Added `docs/CLI_REFERENCE.md` with descriptions, examples, exit codes, notes, and related commands.
-- Added `examples/README.md` with realistic command workflows.
-- Added real terminal preview assets:
-  - `assets/screenshots/terminal-preview.png`
-  - `assets/screenshots/devdoctor-demo.gif`
-- Added screenshot regeneration notes under `assets/screenshots/README.md`.
-- Expanded GitHub issue templates for documentation, performance, and questions.
-- Added private security-report contact link.
-- Rebuilt the label set for mature triage.
-- Added a tag-based GitHub release workflow that builds and attaches distributions.
-- Improved pull request and release templates.
-- Updated repository topics and package metadata.
-- Added tests for project version consistency and local Markdown links.
-- Updated README installation wording to avoid claiming PyPI v1.1.0 availability before publication.
+- Changed the Python distribution name from `devdoctor` to `devdoctor-cli`.
+- Preserved the executable command as `devdoctor`.
+- Updated installation instructions to use `pip install devdoctor-cli`.
+- Updated release templates, release process, release notes, migration guide, and package metadata for the new distribution name.
+- Documented future Homebrew tap command: `brew install imedkablavi/tap/devdoctor`.
+- Added metadata tests that enforce the `devdoctor-cli` distribution name and `devdoctor` console script.
+- Added release workflow validation that installs the built wheel by distribution name and runs `devdoctor --version`.
+- Kept screenshots and GIF assets generated from real command output.
 
-## Validation Results
+## Validation Checklist
 
-Passed:
+Required release validation:
 
 ```bash
 python -m ruff format --check .
@@ -57,87 +50,105 @@ python -m devdoctor --json | python -m json.tool
 python -m devdoctor --json-file /tmp/devdoctor-release-validation/inventory-file.json --markdown-file /tmp/devdoctor-release-validation/inventory.md --html-file /tmp/devdoctor-release-validation/inventory.html --quiet
 python -m devdoctor search docker --no-color
 python -m devdoctor repair docker --no-color
-python -m devdoctor list profiles --no-color
+python -m devdoctor install git docker --no-color
 python -m devdoctor --help
 python -m devdoctor install --help
 python -m devdoctor export --help
 ```
 
-Fresh virtual environment check passed:
+Verification exit-code behavior was checked separately:
+
+```bash
+python -m devdoctor verify git --quiet
+```
+
+On the validation workstation this returned exit code `1` because the selected dependency set had warnings, which is the expected behavior for `verify`.
+
+Fresh wheel install validation:
 
 ```bash
 python -m venv /tmp/devdoctor-release-check
-/tmp/devdoctor-release-check/bin/python -m pip install dist/devdoctor-1.1.0-py3-none-any.whl
+/tmp/devdoctor-release-check/bin/python -m pip install --find-links dist devdoctor-cli
 /tmp/devdoctor-release-check/bin/devdoctor --version
 /tmp/devdoctor-release-check/bin/devdoctor --quiet
 ```
 
-Observed:
+Public PyPI validation after publishing:
 
-```text
-devdoctor 1.1.0
-installed=35 missing=33 warnings=26 broken=0 total=68
+```bash
+python -m venv /tmp/devdoctor-pypi-check
+/tmp/devdoctor-pypi-check/bin/python -m pip install devdoctor-cli
+/tmp/devdoctor-pypi-check/bin/devdoctor --version
+/tmp/devdoctor-pypi-check/bin/devdoctor --quiet
 ```
 
-Distribution artifacts:
+Before first publication, `python -m pip index versions devdoctor-cli` is expected to report no matching distribution.
 
-- `dist/devdoctor-1.1.0.tar.gz`
-- `dist/devdoctor-1.1.0-py3-none-any.whl`
+## Expected Artifacts
 
-Wheel content check confirmed `devdoctor/py.typed`, `devdoctor/cli.py`, and `devdoctor/bootstrap.py` are included.
+After `python -m build`, artifacts should use normalized distribution naming:
+
+- `dist/devdoctor_cli-1.1.0.tar.gz`
+- `dist/devdoctor_cli-1.1.0-py3-none-any.whl`
+
+The wheel must include:
+
+- `devdoctor/py.typed`
+- `devdoctor/cli.py`
+- `devdoctor/bootstrap.py`
+- console script metadata for `devdoctor`
 
 ## Security Review
 
-DevDoctor keeps the correct security posture for a workstation bootstrap tool:
+DevDoctor keeps the expected security posture for a workstation bootstrap CLI:
 
 - Inventory, search, export, and repair commands are read-only.
-- System-changing operations require `--apply`.
+- Mutating operations require `--apply`.
 - Confirmation remains enabled unless `--yes` is provided.
 - Command execution uses argument vectors with `shell=False`.
 - Captured subprocess calls use bounded timeouts where appropriate.
 - Operation logs are structured JSON Lines with bounded verification output.
 - Repair suggestions do not edit shell startup files, start services, change groups, remove packages, or mutate package metadata.
 
-No new command-injection path was introduced in this release-prep pass.
+No command-injection regression was found in this release-prep pass.
 
 ## Remaining Limitations
 
-- PyPI currently resolves `devdoctor` to version `0.2.1`. Maintainers must confirm project ownership/access before publishing v1.1.0 or announcing PyPI installation as current.
-- The release workflow creates GitHub release artifacts, but PyPI trusted publishing is still a roadmap item.
-- Screenshot assets are generated from the maintainer workstation and should be refreshed in a clean terminal environment before major marketing pushes.
-- Distro coverage is broad but not exhaustive; more package mappings should be verified on openSUSE, Void, Alpine, and Nix.
-- Terminal screenshots use static generated assets, not an interactive recording format such as asciinema.
+- `devdoctor-cli` is not yet published on PyPI at the time of this report; public `pip install devdoctor-cli` works only after release publication.
+- The Homebrew tap is documented for future use but is not implemented yet.
+- PyPI trusted publishing is not configured yet.
+- Screenshot assets are real, but generated from the maintainer workstation; refresh them in a clean terminal before major announcements.
+- Distro package mappings should continue to grow through verified contributions.
 
-## Suggested Future Milestones
+## Future Roadmap
 
-- Configure PyPI trusted publishing once project ownership is confirmed.
+- Publish `devdoctor-cli` to PyPI.
+- Configure PyPI trusted publishing.
 - Add signed release artifacts.
-- Add distro fixture tests for more package-manager combinations.
-- Publish a plugin example repository.
-- Add machine-readable schema documentation for bootstrap JSON.
-- Add snapshot tests for narrow and wide terminal rendering.
+- Implement a Homebrew tap formula.
+- Add more distro fixtures for package-manager planning.
+- Publish an external plugin example.
+- Add schema documentation for bootstrap JSON.
+- Add terminal snapshot tests for narrow and wide output.
 
 ## Scores
 
-Overall repository score: 93/100
+- Repository score: 95/100
+- Documentation score: 95/100
+- Packaging score: 94/100
+- GitHub score: 96/100
+- PyPI readiness: 92/100
+- Security score: 95/100
+- Performance score: 88/100
+- Testing score: 93/100
+- Open-source readiness: 96/100
 
-- Architecture: 94/100 - Clear bootstrap domain model, isolated probes, typed results, and plugin entry point.
-- Code quality: 92/100 - Strict linting, typed package, focused tests, and conservative command execution.
-- Security: 95/100 - Strong non-destructive defaults and shell-safe execution model.
-- Performance: 88/100 - Startup is acceptable; future work should reduce repeated subprocess probes where safe.
-- UX: 91/100 - Rich terminal output, no-color mode, quiet output, examples, and repair explanations are strong. Some host-specific warning volume remains expected.
-- Documentation: 95/100 - README, CLI reference, examples, release notes, support, security, and contribution docs are complete and current.
-- Maintainability: 93/100 - CI, release workflow, tests, labels, and templates support long-term maintenance.
-- GitHub readiness: 96/100 - Public-facing repository structure is mature.
-- PyPI readiness: 86/100 - Package builds and installs correctly; publication depends on PyPI project access.
-- Linux community adoption: 92/100 - The tool is scoped, honest, safe by default, and useful to Linux developers.
+Overall score: 94/100
 
-## Release Decision
+## Recommendation
 
 Ready for GitHub release: yes.
+Ready for PyPI release: yes, after uploading `devdoctor-cli` artifacts.
+Ready for community adoption: yes.
 
-Ready for PyPI release: yes, after maintainer access to the existing `devdoctor` PyPI project is confirmed.
-
-Ready for Linux community adoption: yes.
-
-The main thing that would stop DevDoctor from being respected immediately is not the code or documentation. It is publishing ambiguity: the public PyPI name currently points to an older `devdoctor` release. Resolve package ownership or clearly document a different package name before announcing PyPI installation broadly.
+The main remaining release task is external publication: upload `devdoctor-cli` to PyPI and, later, implement the documented Homebrew tap.

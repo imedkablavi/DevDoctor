@@ -15,12 +15,22 @@ def test_project_version_matches_package_version() -> None:
     assert metadata["project"]["version"] == __version__
 
 
+def test_distribution_name_and_console_script_are_stable() -> None:
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert metadata["project"]["name"] == "devdoctor-cli"
+    assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.cli:app"}
+
+
 def test_local_markdown_links_resolve() -> None:
     markdown_files = [
         ROOT / "README.md",
         ROOT / "CONTRIBUTING.md",
+        ROOT / "CODE_OF_CONDUCT.md",
         ROOT / "MIGRATION_GUIDE.md",
+        ROOT / "RELEASE_READINESS.md",
         ROOT / "RELEASE_PROCESS.md",
+        ROOT / "ROADMAP.md",
         ROOT / "SECURITY.md",
         ROOT / "SUPPORT.md",
         *sorted((ROOT / "docs").glob("*.md")),

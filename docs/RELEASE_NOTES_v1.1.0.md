@@ -2,6 +2,8 @@
 
 DevDoctor v1.1.0 turns the bootstrap inventory into an intelligent detection and repair engine while keeping the CLI read-only by default.
 
+The Python distribution for this release is `devdoctor-cli`. The executable command remains `devdoctor`.
+
 ## Highlights
 
 - Tool health states: `ready`, `missing`, `warning`, and `broken`.
@@ -38,9 +40,15 @@ Repair recommendations are intentionally conservative. DevDoctor prints shell ex
 After v1.1.0 is published to PyPI:
 
 ```bash
-python -m pip install --upgrade devdoctor
+python -m pip install --upgrade devdoctor-cli
 devdoctor --version
 devdoctor check --profile general
+```
+
+Future Homebrew tap command, after the tap is implemented:
+
+```bash
+brew install imedkablavi/tap/devdoctor
 ```
 
 ## Validation
