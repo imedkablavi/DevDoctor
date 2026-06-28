@@ -20,8 +20,10 @@ devdoctor --quiet
 ```
 
 ```text
-installed=33 missing=31 broken=0 total=64
+installed=33 missing=31 warnings=2 broken=0 total=64
 ```
+
+Inventory rows include each tool's health state. `ready` means the command was found and no local problem was detected. `missing` means no usable executable was found. `warning` means the tool is present but has a repairable configuration, dependency, daemon, or PATH concern. `broken` is reserved for unusable local commands such as broken symlinks or bad executable permissions.
 
 ## JSON, Markdown, and HTML
 
@@ -92,20 +94,51 @@ devdoctor verify --profile general
 devdoctor verify git python docker --quiet
 ```
 
-`verify` exits with status code `1` when any selected tool is missing or broken.
+`verify` exits with status code `1` when any selected tool is missing, warning, or broken.
 
 Repair suggestions are derived from local evidence such as broken symlinks, non-executable files in `PATH`, missing dependencies, and package-manager ownership data when available.
+
+Repair output includes the problem, why it matters, risk level, repair command or manual action, and a verification command when the catalog knows one. `repair` is read-only; it does not execute the suggested command.
+
+Examples of checks DevDoctor can explain:
+
+- Docker CLI installed but `docker info` cannot reach a daemon.
+- Docker socket permission failures.
+- Git missing global `user.name` or `user.email`.
+- Missing SSH public key.
+- Python installed without working `pip`.
+- Node.js installed without `npm`.
+- Java installed without `JAVA_HOME`.
+- Cargo user binary directory missing from `PATH`.
+- Flutter with missing Android toolchain dependencies.
 
 ## Catalog Search and Lists
 
 ```bash
 devdoctor search kubectl
+devdoctor search docker
 devdoctor list tools
 devdoctor list tools --category terminal-utilities
 devdoctor list categories
 ```
 
-Tool IDs are stable command identifiers used by profiles and install plans.
+Search output includes description, category, health state, installed version, installation method, profiles that reference the tool, dependency status, install command, and website. Tool IDs are stable command identifiers used by profiles and install plans.
+
+When a selected tool declares required dependencies, DevDoctor includes those dependency tools in the inventory context. For example, `devdoctor check flutter` also evaluates Git, Java, ADB, and Android SDK command-line tools where the catalog knows the relationship. Search output can include optional dependency context as well.
+
+## PATH Analysis
+
+The default inventory shows a PATH panel when DevDoctor detects a problem. It can report:
+
+- empty PATH entries
+- duplicate directories
+- missing directories
+- entries that are files instead of directories
+- directories that exist but are not searchable
+- common user binary directories that exist but are not exported
+- commands shadowed by another executable earlier in PATH
+
+DevDoctor prints exact export commands only when it can infer them safely. It never edits shell startup files automatically.
 
 ## Update, Uninstall, and Cache Commands
 
@@ -125,7 +158,7 @@ devdoctor self-update
 devdoctor self-update --apply
 ```
 
-All executed commands are run with `shell=False` and are logged to the platformdirs user state directory, usually `~/.local/state/devdoctor/operations.log`.
+All executed commands are run with `shell=False` and are logged as JSON Lines to the platformdirs user state directory, usually `~/.local/state/devdoctor/operations.log`. For install and uninstall plans, DevDoctor also records the verification command and result when the catalog defines one.
 
 ## No Color
 

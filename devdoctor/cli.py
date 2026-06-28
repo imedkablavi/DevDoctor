@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Iterable, Sequence
+import time
+from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -38,6 +40,7 @@ from devdoctor.exporters.json import render_json, write_json_report
 from devdoctor.exporters.markdown import write_markdown_report
 from devdoctor.exporters.pdf import write_pdf_report
 from devdoctor.models import HealthReport
+from devdoctor.operations import OperationLogRecord, append_operation_log
 from devdoctor.paths import latest_report_path, operation_log_path
 from devdoctor.ui.bootstrap import (
     bootstrap_group,
@@ -45,11 +48,13 @@ from devdoctor.ui.bootstrap import (
     compact_plan_status,
     profiles_table,
     repair_suggestions_table,
+    search_results_table,
 )
 from devdoctor.ui.logo import banner
 from devdoctor.ui.progress import create_progress
 from devdoctor.ui.table import compact_status, report_group
 from devdoctor.ui.theme import create_console
+from devdoctor.utils import run_command
 
 app = typer.Typer(
     name="devdoctor",
@@ -241,7 +246,7 @@ def verify(
         typer.Option("--no-color", help="Disable terminal colors."),
     ] = False,
 ) -> None:
-    """Verify selected tools and exit non-zero when any are missing or broken."""
+    """Verify selected tools and exit non-zero when any are missing, warning, or broken."""
 
     console = create_console(no_color=no_color)
     inventory = _inventory_for(profile_id=profile, category_name=None, tool_ids=tuple(tools or ()))
@@ -249,7 +254,7 @@ def verify(
         console.print(compact_inventory_status(inventory))
     else:
         console.print(bootstrap_group(inventory))
-    if inventory.missing or inventory.broken:
+    if inventory.missing or inventory.warnings or inventory.broken:
         raise typer.Exit(code=1)
 
 
@@ -290,8 +295,11 @@ def search(
     if not matches:
         console.print(f"[error]No catalog tools matched '{query}'.[/error]")
         raise typer.Exit(code=1)
-    inventory = bootstrap_inventory(include_ids=(spec.id for spec in matches))
-    console.print(bootstrap_group(inventory))
+    inventory = bootstrap_inventory(
+        include_ids=(spec.id for spec in matches),
+        include_optional_dependencies=True,
+    )
+    console.print(search_results_table(inventory, BOOTSTRAP_PROFILES))
 
 
 @app.command()
@@ -374,10 +382,10 @@ def repair(
 
     console = create_console(no_color=no_color)
     inventory = _inventory_for(profile_id=profile, category_name=None, tool_ids=tuple(tools or ()))
-    if not inventory.broken:
-        console.print("[success]No broken selected tool installations detected.[/success]")
+    if not inventory.needs_attention:
+        console.print("[success]No repair suggestions for the selected tools.[/success]")
         return
-    console.print(repair_suggestions_table(inventory.broken))
+    console.print(repair_suggestions_table(inventory.needs_attention))
 
 
 @app.command()
@@ -426,7 +434,13 @@ def uninstall(
         raise typer.Exit(code=1)
     console.print(compact_plan_status(rollback_plans))
     if apply:
-        _execute_plans(tuple(rollback_plans), dry_run=False, yes=yes, console=console)
+        _execute_plans(
+            tuple(rollback_plans),
+            dry_run=False,
+            yes=yes,
+            console=console,
+            operation="uninstall",
+        )
     else:
         console.print("[muted]No changes made. Use --apply to execute rollback commands.[/muted]")
 
@@ -457,7 +471,7 @@ def update(
     for command in commands:
         console.print(" ".join(command))
     if apply:
-        _execute_commands(commands, yes=yes, console=console)
+        _execute_commands(commands, yes=yes, console=console, operation="update")
     else:
         console.print("[muted]No changes made. Use --apply to execute update commands.[/muted]")
 
@@ -483,7 +497,7 @@ def self_update(
     command = (sys.executable, "-m", "pip", "install", "--upgrade", "devdoctor")
     console.print(" ".join(command))
     if apply:
-        _execute_commands((command,), yes=yes, console=console)
+        _execute_commands((command,), yes=yes, console=console, operation="self-update")
     else:
         console.print("[muted]No changes made. Use --apply to execute the self-update.[/muted]")
 
@@ -600,7 +614,7 @@ def cache_clean(
     for command in commands:
         console.print(" ".join(command))
     if apply:
-        _execute_commands(commands, yes=yes, console=console)
+        _execute_commands(commands, yes=yes, console=console, operation="cache-clean")
     else:
         console.print("[muted]No changes made. Use --apply to clean caches.[/muted]")
 
@@ -825,8 +839,10 @@ def _execute_plans(
     dry_run: bool,
     yes: bool,
     console: Console,
+    operation: str = "install",
 ) -> None:
     commands: list[tuple[str, ...]] = []
+    metadata: dict[tuple[str, ...], tuple[str, str | None, tuple[str, ...] | None]] = {}
     for plan in plans:
         if dry_run:
             if plan.dry_run_command is None:
@@ -835,12 +851,19 @@ def _execute_plans(
                 )
                 continue
             commands.append(plan.dry_run_command)
+            metadata[plan.dry_run_command] = ("dry-run", plan.manager, None)
         else:
             commands.append(plan.command)
+            metadata[plan.command] = (operation, plan.manager, plan.verify_command)
     if not commands:
         console.print("[muted]No executable commands selected.[/muted]")
         return
-    _execute_commands(tuple(commands), yes=yes or dry_run, console=console)
+    _execute_commands(
+        tuple(commands),
+        yes=yes or dry_run,
+        console=console,
+        operation_metadata=metadata,
+    )
 
 
 def _execute_commands(
@@ -848,24 +871,47 @@ def _execute_commands(
     *,
     yes: bool,
     console: Console,
+    operation: str = "command",
+    operation_metadata: Mapping[tuple[str, ...], tuple[str, str | None, tuple[str, ...] | None]]
+    | None = None,
 ) -> None:
     log_path = operation_log_path()
-    with log_path.open("a", encoding="utf-8") as log_file:
-        for command in commands:
-            rendered = " ".join(command)
-            if not yes and not typer.confirm(f"Run `{rendered}`?"):
-                console.print(f"[muted]Skipped {rendered}[/muted]")
-                continue
-            log_file.write(f"$ {rendered}\n")
-            completed = subprocess.run(list(command), check=False)
-            log_file.write(f"exit={completed.returncode}\n")
-            log_file.flush()
-            if completed.returncode != 0:
-                console.print(
-                    f"[error]Command failed with exit code {completed.returncode}.[/error]"
-                )
-                console.print(f"[muted]Log: {log_path}[/muted]")
-                raise typer.Exit(code=completed.returncode)
+    metadata = operation_metadata or {}
+    for command in commands:
+        rendered = " ".join(command)
+        if not yes and not typer.confirm(f"Run `{rendered}`?"):
+            console.print(f"[muted]Skipped {rendered}[/muted]")
+            continue
+        operation_name, manager, verification_command = metadata.get(
+            command, (operation, None, None)
+        )
+        started_at = time.perf_counter()
+        completed = subprocess.run(list(command), check=False)
+        duration = time.perf_counter() - started_at
+        verification_exit_code: int | None = None
+        verification_output: str | None = None
+        if completed.returncode == 0 and verification_command:
+            verification = run_command(verification_command, timeout=10)
+            verification_exit_code = verification.returncode
+            verification_output = verification.combined_output[:500] or None
+        append_operation_log(
+            log_path,
+            OperationLogRecord(
+                timestamp=datetime.now(UTC),
+                operation=operation_name,
+                selected_package_manager=manager,
+                command=command,
+                exit_code=completed.returncode,
+                duration_seconds=duration,
+                verification_command=verification_command,
+                verification_exit_code=verification_exit_code,
+                verification_output=verification_output,
+            ),
+        )
+        if completed.returncode != 0:
+            console.print(f"[error]Command failed with exit code {completed.returncode}.[/error]")
+            console.print(f"[muted]Log: {log_path}[/muted]")
+            raise typer.Exit(code=completed.returncode)
     console.print(f"[success]Command log:[/success] [path]{log_path}[/path]")
 
 

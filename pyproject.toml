@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "devdoctor"
-version = "1.0.0"
+version = "1.1.0"
 description = "Bootstrap and repair Linux developer workstations."
 readme = "README.md"
 requires-python = ">=3.11"

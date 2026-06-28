@@ -27,6 +27,10 @@ For each tool DevDoctor records:
 - existing configuration locations
 - official website
 - recommended version metadata when the catalog provides it
+- inferred installation method
+- dependency status for related tools
+- health state
+- repair recommendations
 - broken installation signals
 - permission issues
 - PATH issues
@@ -34,6 +38,59 @@ For each tool DevDoctor records:
 - package-manager install plan
 
 No value is fabricated. If a platform cannot report something reliably, the field is `null`, empty, or omitted from terminal output.
+
+## Health States
+
+The bootstrap workflow uses four health states:
+
+- `ready`: a usable executable was found and no local issue was detected.
+- `missing`: no usable executable was found.
+- `warning`: the executable exists, but DevDoctor found a configuration, dependency, daemon, or PATH concern that should be reviewed.
+- `broken`: the command resolves to an unusable local filesystem entry, such as a broken symlink or a file without executable permission.
+
+Warnings and broken states are derived from local evidence. They are not guessed from package names or expected versions.
+
+## Dependency Engine
+
+Catalog entries may declare required or optional tool dependencies. The inventory resolves those relationships and reports each dependency with:
+
+- tool ID and title
+- required or optional state
+- installed state
+- dependency health
+- reason the dependency matters
+- install plan for missing dependencies when one is available
+
+Selecting a single tool also includes its required dependency graph in the detection context, so `devdoctor check flutter` can explain missing Git, Java, ADB, and Android SDK command-line tools without requiring those IDs on the command line. Search may include optional dependency context because it is informational and does not drive verification exit status.
+
+## Repair Recommendations
+
+Repair recommendations contain:
+
+- problem
+- reason
+- risk
+- repair command or manual action
+- verification command
+- rollback command when one is known
+
+The `repair` command is read-only. DevDoctor prints recommendations; it does not execute them.
+
+Current repair checks include Docker daemon and socket failures, Git identity configuration, missing SSH public keys, Python without pip, Node.js without npm, Java without `JAVA_HOME`, Cargo PATH gaps, Flutter Android toolchain gaps, broken symlinks, non-executable commands, duplicate executable installations, and missing runtime dependencies.
+
+## PATH Analyzer
+
+The host context includes a complete PATH analysis:
+
+- empty PATH entries
+- duplicate entries
+- missing directories
+- entries that are not directories
+- non-searchable directories
+- common user binary directories that exist but are not exported
+- shadowed executables
+
+Suggested export commands are included only when DevDoctor can infer a safe command from the current PATH value.
 
 ## Built-in Categories
 
@@ -97,7 +154,7 @@ The install planner can use detected managers from these families:
 - mise
 - asdf
 
-Install plans include the command, a dry-run command when the manager supports one, rollback command when known, verification command, and risk label.
+Install plans include the selected manager, manager selection reason, package name, command, dry-run command when the manager supports one, rollback command when known, verification command, risk label, sudo requirement, and dependency metadata.
 
 ## Profiles
 

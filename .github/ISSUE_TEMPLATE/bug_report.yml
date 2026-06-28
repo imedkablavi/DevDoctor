@@ -12,7 +12,7 @@ body:
     attributes:
       label: DevDoctor version
       description: Run `devdoctor --version`.
-      placeholder: "1.0.0"
+      placeholder: "1.1.0"
     validations:
       required: true
   - type: input
@@ -30,6 +30,9 @@ body:
       options:
         - Inventory
         - Install plan
+        - Repair suggestion
+        - PATH analysis
+        - Search
         - Command execution
         - Export
         - Profile

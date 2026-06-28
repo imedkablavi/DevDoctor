@@ -5,6 +5,31 @@ All notable changes to DevDoctor are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses semantic versioning.
 
+## [1.1.0] - 2026-06-28
+
+### Added
+
+- Intelligent tool detection with health states, inferred installation method, alternate executable paths, dependency status, and repair recommendations.
+- Dependency graph expansion for selected tools so commands like `devdoctor check flutter` include the related toolchain context.
+- Repair recommendations for Docker daemon/socket failures, Git identity configuration, missing SSH public keys, Python without pip, Node.js without npm, Java without `JAVA_HOME`, Cargo PATH gaps, Flutter Android toolchain gaps, broken symlinks, non-executable commands, duplicate executable installations, and missing runtime dependencies.
+- PATH analyzer for empty entries, duplicate directories, missing directories, non-directory entries, non-searchable directories, unexported user binary directories, and shadowed executables.
+- Richer `devdoctor search` output with category, health, version, installation method, profiles, dependencies, install command, and website.
+- Structured JSON Lines operation logging with selected package manager, executed command, exit code, duration, verification command, and verification result.
+- Verification-after-execution for install and uninstall plans when the catalog defines a verification command.
+- Unit tests for PATH analysis, broken symlink discovery, dependency resolution, repair recommendations, structured operation logs, and command verification logging.
+
+### Changed
+
+- Install plans now show package name, selected package-manager reason, sudo requirement, dependency metadata, verification command, and rollback command when known.
+- The bootstrap inventory includes dependency tools in scoped checks and search results, preserving catalog ordering.
+- Terminal repair output now explains what happened, why it matters, how to fix it, and how to verify the fix.
+
+### Security
+
+- Mutating command execution remains opt-in through `--apply`, with confirmation unless `--yes` is provided.
+- Command execution continues to use argument vectors with `shell=False`.
+- Repair suggestions remain read-only and do not modify shell startup files, service state, group membership, or package metadata automatically.
+
 ## [1.0.0] - 2026-06-28
 
 ### Added

@@ -1,13 +1,15 @@
-# DevDoctor v1.0.0
+# DevDoctor v1.1.0
 
 ## Highlights
 
-- Bootstrap-first Linux workstation inventory.
+- Intelligent Linux workstation inventory with health states.
+- Dependency-aware detection and repair recommendations.
+- PATH analysis for missing, duplicate, unexported, and shadowed command paths.
 - Distro-aware install, update, uninstall, repair, and cache-clean command planning.
 - Built-in profiles for common developer roles.
 - JSON, Markdown, and standalone HTML inventory exports.
+- Structured operation logging with verification results.
 - Bootstrap catalog plugin entry point group.
-- v1 brand system with logo, icon, favicon, and GitHub banner.
 
 ## Installation
 
@@ -20,6 +22,8 @@ python -m pip install --upgrade devdoctor
 - Inventory: `devdoctor`
 - JSON: `devdoctor --json`
 - Profiles: `devdoctor list profiles`
+- Search: `devdoctor search docker`
+- Repair suggestions: `devdoctor repair docker`
 - Legacy health reports: `devdoctor health`
 
 ## Validation
@@ -30,6 +34,8 @@ python -m pip install --upgrade devdoctor
 - [ ] `python -m devdoctor --quiet`
 - [ ] `python -m devdoctor --no-color --quiet`
 - [ ] `python -m devdoctor --json | python -m json.tool`
+- [ ] `python -m devdoctor search docker --no-color`
+- [ ] `python -m devdoctor repair docker --no-color`
 - [ ] `python -m devdoctor list profiles --no-color`
 - [ ] `python -m build`
 - [ ] `python -m twine check dist/*`

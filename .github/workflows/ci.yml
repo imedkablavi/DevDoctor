@@ -40,4 +40,6 @@ jobs:
         run: |
           devdoctor --quiet
           devdoctor check git --quiet
+          devdoctor search docker --no-color
+          devdoctor repair docker --no-color
           devdoctor --json | python -m json.tool >/tmp/devdoctor-inventory.json

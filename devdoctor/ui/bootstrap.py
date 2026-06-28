@@ -15,6 +15,7 @@ from devdoctor.bootstrap import (
     BootstrapCategory,
     BootstrapInventory,
     BootstrapProfile,
+    HealthState,
     InstallPlan,
     ToolDetection,
 )
@@ -31,6 +32,9 @@ def bootstrap_group(
         bootstrap_header(inventory),
         system_context_panel(inventory),
     ]
+    path_panel = path_analysis_panel(inventory)
+    if path_panel is not None:
+        renderables.append(path_panel)
 
     for category, detections in inventory.categories().items():
         visible = tuple(
@@ -49,9 +53,9 @@ def bootstrap_group(
     if plans:
         renderables.append(install_plans_table(plans))
 
-    broken = inventory.broken
-    if broken:
-        renderables.append(repair_suggestions_table(broken))
+    needs_attention = inventory.needs_attention
+    if needs_attention:
+        renderables.append(repair_suggestions_table(needs_attention))
 
     return Group(*renderables)
 
@@ -75,7 +79,9 @@ def bootstrap_header(inventory: BootstrapInventory) -> Panel:
     counts.append("  ")
     counts.append(f"{summary['missing']} missing", style="error")
     counts.append("  ")
-    counts.append(f"{summary['broken']} broken", style="warning")
+    counts.append(f"{summary['warnings']} warnings", style="warning")
+    counts.append("  ")
+    counts.append(f"{summary['broken']} broken", style="error")
 
     grid.add_row(title, counts)
     return Panel(grid, border_style="bright_cyan", box=box.SIMPLE, padding=(1, 2))
@@ -142,6 +148,7 @@ def category_table(
         show_lines=False,
     )
     table.add_column("", width=2, no_wrap=True)
+    table.add_column("Health", no_wrap=True, ratio=1)
     table.add_column("Tool", min_width=14, ratio=2)
     table.add_column("Version", no_wrap=True, ratio=1)
     table.add_column("Path", ratio=3, overflow="fold")
@@ -150,6 +157,7 @@ def category_table(
     for detection in detections:
         table.add_row(
             _status_icon(detection),
+            _health_text(detection.health),
             detection.spec.title,
             detection.version or "",
             detection.executable_path or "",
@@ -170,16 +178,20 @@ def install_plans_table(plans: Iterable[InstallPlan]) -> Table:
     )
     table.add_column("Tool", min_width=14)
     table.add_column("Manager", no_wrap=True)
+    table.add_column("Package", no_wrap=True)
     table.add_column("Risk", ratio=1)
     table.add_column("Command", ratio=3, overflow="fold")
+    table.add_column("Why", ratio=3, overflow="fold")
     table.add_column("Dry run", ratio=3, overflow="fold")
 
     for plan in plans:
         table.add_row(
             plan.tool_title,
             plan.manager,
+            plan.package_name,
             plan.risk.split(" - ", 1)[0],
             " ".join(plan.command),
+            plan.manager_reason,
             " ".join(plan.dry_run_command) if plan.dry_run_command else "",
         )
     return table
@@ -195,13 +207,136 @@ def repair_suggestions_table(detections: Iterable[ToolDetection]) -> Table:
         header_style="bold white",
         expand=True,
     )
-    table.add_column("Tool", min_width=14)
-    table.add_column("Problem", ratio=2)
-    table.add_column("Suggested action", ratio=3, overflow="fold")
+    table.add_column("Tool", min_width=14, ratio=1)
+    table.add_column("Risk", no_wrap=True)
+    table.add_column("Details", ratio=4, overflow="fold")
+    table.add_column("Repair", ratio=3, overflow="fold")
 
     for detection in detections:
-        for problem, action in _repair_actions(detection):
-            table.add_row(detection.spec.title, problem, action)
+        for recommendation in detection.repair_recommendations:
+            details = "\n".join(
+                item
+                for item in (
+                    recommendation.problem,
+                    recommendation.reason,
+                    (
+                        f"Verify: {' '.join(recommendation.verification_command)}"
+                        if recommendation.verification_command
+                        else ""
+                    ),
+                )
+                if item
+            )
+            table.add_row(
+                detection.spec.title,
+                recommendation.risk,
+                details,
+                recommendation.command_text,
+            )
+    return table
+
+
+def path_analysis_panel(inventory: BootstrapInventory) -> Panel | None:
+    """Render PATH analysis when issues or shadowed executables exist."""
+
+    path_analysis = inventory.system.get("path_analysis")
+    if not isinstance(path_analysis, dict):
+        return None
+    issues = path_analysis.get("issues", ())
+    shadowed = path_analysis.get("shadowed_executables", ())
+    if not issues and not shadowed:
+        return None
+
+    table = Table(
+        title="PATH analysis",
+        box=box.SIMPLE,
+        border_style="yellow",
+        header_style="bold white",
+        expand=True,
+    )
+    table.add_column("Type", no_wrap=True)
+    table.add_column("Path", ratio=2, overflow="fold")
+    table.add_column("Problem", ratio=3, overflow="fold")
+    table.add_column("Recommendation", ratio=3, overflow="fold")
+
+    if isinstance(issues, list):
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            recommendation = str(issue.get("recommendation") or "")
+            export_command = issue.get("export_command")
+            if export_command:
+                recommendation = f"{recommendation}\n{export_command}"
+            table.add_row(
+                str(issue.get("kind") or ""),
+                str(issue.get("path") or ""),
+                str(issue.get("problem") or ""),
+                recommendation,
+            )
+    if isinstance(shadowed, list):
+        for record in shadowed:
+            if not isinstance(record, dict):
+                continue
+            table.add_row(
+                "shadowed",
+                str(record.get("primary_path") or ""),
+                f"{record.get('executable')} appears more than once in PATH.",
+                ", ".join(str(path) for path in record.get("shadowed_paths", ()) or ()),
+            )
+    return Panel(table, title="PATH", border_style="yellow", box=box.SIMPLE)
+
+
+def search_results_table(
+    inventory: BootstrapInventory,
+    profiles: Iterable[BootstrapProfile],
+) -> Table:
+    """Render rich catalog search results."""
+
+    profiles_by_tool: dict[str, list[str]] = {}
+    for profile in profiles:
+        for tool_id in profile.tool_ids:
+            profiles_by_tool.setdefault(tool_id, []).append(profile.id)
+
+    table = Table(
+        title="Search results",
+        box=box.SIMPLE,
+        border_style="bright_black",
+        header_style="bold white",
+        expand=True,
+    )
+    table.add_column("Tool", min_width=14, ratio=1)
+    table.add_column("Health", no_wrap=True)
+    table.add_column("Details", ratio=4, overflow="fold")
+    table.add_column("Install", ratio=3, overflow="fold")
+
+    for detection in inventory.detections:
+        dependencies = ", ".join(
+            f"{status.tool_id}{'' if status.required else ' (optional)'}"
+            for status in detection.dependency_status
+        )
+        details = "\n".join(
+            item
+            for item in (
+                detection.spec.description,
+                f"Category: {detection.spec.category.value}",
+                f"Version: {detection.version}" if detection.version else "",
+                (
+                    f"Manager: {detection.installation_method or detection.package_manager}"
+                    if detection.installation_method or detection.package_manager
+                    else ""
+                ),
+                f"Profiles: {', '.join(profiles_by_tool.get(detection.spec.id, ()))}",
+                f"Dependencies: {dependencies}" if dependencies else "",
+                detection.spec.website,
+            )
+            if item
+        )
+        table.add_row(
+            detection.spec.title,
+            detection.health.value,
+            details,
+            _plan_text(detection),
+        )
     return table
 
 
@@ -229,7 +364,7 @@ def compact_inventory_status(inventory: BootstrapInventory) -> str:
     summary = inventory.to_dict()["summary"]
     return (
         f"installed={summary['installed']} missing={summary['missing']} "
-        f"broken={summary['broken']} total={summary['total']}"
+        f"warnings={summary['warnings']} broken={summary['broken']} total={summary['total']}"
     )
 
 
@@ -240,11 +375,21 @@ def compact_plan_status(plans: Iterable[InstallPlan]) -> str:
 
 
 def _status_icon(detection: ToolDetection) -> Text:
-    if detection.broken_installation:
+    if detection.health in {HealthState.BROKEN, HealthState.WARNING}:
         return Text("!", style="warning")
     if detection.installed:
         return Text("✓", style="success")
     return Text("✗", style="error")
+
+
+def _health_text(health: HealthState) -> Text:
+    style = {
+        HealthState.READY: "success",
+        HealthState.MISSING: "error",
+        HealthState.WARNING: "warning",
+        HealthState.BROKEN: "error",
+    }[health]
+    return Text(health.value, style=style)
 
 
 def _plan_text(detection: ToolDetection) -> str:
@@ -253,27 +398,3 @@ def _plan_text(detection: ToolDetection) -> str:
     if detection.install_plan is None:
         return "No supported local manager detected"
     return detection.install_plan.command_text
-
-
-def _repair_actions(detection: ToolDetection) -> tuple[tuple[str, str], ...]:
-    actions: list[tuple[str, str]] = []
-    for issue in detection.permission_issues:
-        if detection.executable_path:
-            actions.append((issue, f"Review ownership and mode: ls -l {detection.executable_path}"))
-    for issue in detection.path_issues:
-        if detection.executable_path:
-            actions.append(
-                (issue, f"Remove or relink stale executable: {detection.executable_path}")
-            )
-    for dependency in detection.missing_dependencies:
-        actions.append(
-            (
-                f"Missing dependency: {dependency}",
-                f"Install dependency before using {detection.spec.title}.",
-            )
-        )
-    if not actions and detection.broken_installation:
-        actions.append(
-            ("Broken installation", "Reinstall the tool with the package manager that owns it.")
-        )
-    return tuple(actions)

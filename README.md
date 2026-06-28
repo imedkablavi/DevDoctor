@@ -15,7 +15,7 @@
   <strong>Bootstrap and repair Linux developer workstations.</strong>
 </p>
 
-DevDoctor inventories a Linux workstation, detects developer tools, and shows the safest package-manager commands needed to install, update, verify, repair, or remove them.
+DevDoctor inventories a Linux workstation, detects developer tools, explains broken setups, and shows the safest package-manager commands needed to install, update, verify, repair, or remove them.
 
 It is not a system monitor and it is not a scorecard. The default output is a plain terminal report built from local system data: distribution, package managers, shell, desktop/session, virtualization, PATH, language runtimes, container tooling, cloud CLIs, databases, security tools, build systems, and common terminal utilities.
 
@@ -26,17 +26,19 @@ DevDoctor does not run privileged commands during a scan. Commands that change t
 ```text
 $ devdoctor check --profile devops --missing
 
-DevDoctor  v1.0.0                         4 installed  7 missing  0 broken
+DevDoctor  v1.1.0             4 installed  7 missing  2 warnings  0 broken
 Linux developer workstation bootstrap
 
 Host
 OS             Fedora Linux 42        Arch        x86_64
 Shell          bash                   Desktop     GNOME
 Session        wayland                Terminal    xterm-256color
-Managers       dnf, flatpak, pip      PATH issues 0
+Managers       dnf, flatpak, pip      PATH issues 1
 
 Containers
-✗ Docker                                      sudo dnf install moby-engine
+! Docker       warning    29.0.0      /usr/bin/docker
+  Repair: Docker daemon is not running
+  Verify: docker info
 
 DevOps
 ✗ kubectl                                     sudo dnf install kubernetes-client
@@ -67,6 +69,8 @@ devdoctor
 devdoctor check --profile general
 devdoctor check git docker node
 devdoctor --json | python -m json.tool
+devdoctor search docker
+devdoctor repair docker
 ```
 
 Preview installation work without changing the machine:
@@ -89,8 +93,8 @@ devdoctor install --profile frontend --apply
 | `devdoctor` | Full workstation inventory. |
 | `devdoctor check [tools...]` | Inspect selected tools, a category, or a profile. |
 | `devdoctor install [tools...]` | Preview or run install plans. |
-| `devdoctor repair [tools...]` | Show repair suggestions for broken commands in `PATH`. |
-| `devdoctor verify [tools...]` | Exit non-zero when selected tools are missing or broken. |
+| `devdoctor repair [tools...]` | Show repair suggestions for broken tools, missing dependencies, and PATH problems. |
+| `devdoctor verify [tools...]` | Exit non-zero when selected tools are missing, warning, or broken. |
 | `devdoctor search QUERY` | Search the local tool catalog. |
 | `devdoctor list profiles` | Show built-in bootstrap profiles. |
 | `devdoctor list tools` | Show catalog tool IDs without probing the system. |
@@ -130,7 +134,29 @@ Built-in profiles include `general`, `frontend`, `backend`, `python`, `node`, `r
 | Terminal and build tools | curl, wget, jq, ripgrep, fd, fzf, Starship, GCC, Clang, Make, CMake, Ninja. |
 | Mobile, AI, and games | Android Debug Bridge, Flutter, Ollama, CUDA compiler, Godot. |
 
-For each tool DevDoctor records installed state, executable path, parsed version, owning package where the platform can report it, existing configuration locations, broken local installation signals, missing dependencies, and a distro-aware install plan when one is available.
+For each tool DevDoctor records installed state, executable path, parsed version, owning package where the platform can report it, inferred installation method, existing configuration locations, dependency status, health state, repair recommendations, and a distro-aware install plan when one is available.
+
+## Intelligent Repair
+
+DevDoctor v1.1.0 adds a repair engine that turns local evidence into explicit next steps. It currently detects:
+
+- Docker CLI installed while the daemon is stopped or the socket is not accessible.
+- Git without global `user.name` or `user.email`.
+- Missing SSH public keys for Git and server workflows.
+- Python without working `pip`.
+- Node.js without `npm`.
+- Java without `JAVA_HOME`.
+- Cargo installations where `~/.cargo/bin` exists but is not exported.
+- Flutter Android toolchain gaps.
+- Broken executable symlinks, non-executable commands, and duplicate PATH installations.
+
+Repair output always includes the problem, reason, risk, repair command or manual action, and verification command when one is available. DevDoctor does not run repair commands from `repair`; it reports them.
+
+## PATH Analysis
+
+The bootstrap inventory includes a PATH analyzer. It reports empty PATH entries, duplicate directories, missing directories, entries that are not directories, non-searchable directories, common user binary directories that exist but are not exported, and shadowed executables.
+
+When the fix is a shell export, DevDoctor prints the exact command it can safely infer. It never edits shell startup files automatically.
 
 ## Export Formats
 
@@ -152,7 +178,8 @@ The JSON export is the stable machine-readable format. Markdown is meant for iss
 - Install, update, uninstall, cache, and self-update commands are previewed first.
 - `--apply` is required before any command is executed.
 - Unless `--yes` is passed, each command still asks for confirmation.
-- Executed operations are logged under the user state directory, usually `~/.local/state/devdoctor/operations.log`.
+- Executed operations are logged as JSON Lines under the user state directory, usually `~/.local/state/devdoctor/operations.log`.
+- Successful install and uninstall commands run their verification command afterward when the catalog knows one.
 - DevDoctor does not store secrets, tokens, package-manager credentials, or shell history.
 
 ## Supported Distributions
@@ -210,7 +237,7 @@ When changing catalog entries, add or update tests for install-plan selection, v
 - External plugin examples.
 - Signed release artifacts and PyPI publication workflow.
 - Optional package-manager dry-run parsers for dependency and download-size reporting where the manager exposes real data.
-- Safer repair actions for common PATH, permission, symlink, and package-cache problems.
+- More repair checks for distro-specific package metadata and service managers.
 
 ## FAQ
 
@@ -233,7 +260,7 @@ No. DevDoctor is intentionally Linux-first.
 - [Accessibility](docs/ACCESSIBILITY.md)
 - [Brand system](docs/BRAND.md)
 - [Release process](docs/RELEASE.md)
-- [Release notes](docs/RELEASE_NOTES_v1.0.0.md)
+- [Release notes](docs/RELEASE_NOTES_v1.1.0.md)
 
 ## License
 

@@ -1,6 +1,6 @@
 repository:
   name: DevDoctor
-  description: "Bootstrap and repair Linux developer workstations from a real local inventory."
+  description: "Diagnose, bootstrap, and repair Linux developer workstations from real local inventory."
   homepage: "https://github.com/imedkablavi/DevDoctor"
   private: false
   has_issues: true
@@ -20,5 +20,6 @@ topics:
   - package-manager
   - devops
   - diagnostics
+  - repair
   - workstation
   - open-source

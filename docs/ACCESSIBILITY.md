@@ -26,7 +26,7 @@ Terminal output uses a small set of status symbols:
 
 - `✓` installed
 - `✗` missing
-- `!` broken or needs repair
+- `!` warning or broken state that needs review
 
 Use JSON output when symbols are not appropriate for the consuming environment.
 

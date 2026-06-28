@@ -1,6 +1,6 @@
 # Brand System
 
-DevDoctor uses a calm workstation-bootstrap identity: dark terminal surfaces, cyan diagnostics, green ready states, amber repair states, and rose missing states.
+DevDoctor uses a calm workstation-bootstrap identity: dark terminal surfaces, cyan diagnostics, green ready states, amber warning states, and rose missing states.
 
 ## Assets
 
