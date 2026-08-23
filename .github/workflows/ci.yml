@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "hardening/**"]
   pull_request:
 
 jobs:
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Check out repository
@@ -42,4 +42,46 @@ jobs:
           devdoctor check git --quiet
           devdoctor search docker --no-color
           devdoctor repair docker --no-color
+          devdoctor manager-conflicts
+          devdoctor completion bash >/tmp/devdoctor.bash
+          devdoctor completion zsh >/tmp/_devdoctor
+          devdoctor completion fish >/tmp/devdoctor.fish
+          devdoctor diagnostics --stdout | python -m json.tool >/tmp/devdoctor-diagnostics.json
           devdoctor --json | python -m json.tool >/tmp/devdoctor-inventory.json
+
+  clean-wheel-install:
+    name: Clean wheel install / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Build wheel in isolated environment
+        run: |
+          python -m pip install build
+          python -m build --wheel
+      - name: Install wheel into a clean virtualenv
+        run: |
+          python -m venv /tmp/devdoctor-clean
+          /tmp/devdoctor-clean/bin/python -m pip install --no-cache-dir dist/*.whl
+          /tmp/devdoctor-clean/bin/devdoctor --version
+          /tmp/devdoctor-clean/bin/devdoctor completion bash >/dev/null
+          /tmp/devdoctor-clean/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-clean/bin/python -m json.tool >/dev/null
+
+  package-manager-fixtures:
+    name: Package manager fixture matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - name: Validate APT/DNF/rpm-ostree/Pacman/Zypper/Nix/Flatpak/mixed fixtures
+        run: pytest -q tests/test_package_managers.py tests/test_hardening.py
