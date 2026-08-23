@@ -59,7 +59,9 @@ def atomic_install_plan_for_spec(
                 dry_run_command=dry_run,
                 verify_command=bootstrap._verification_command(spec),
                 rollback_command=rollback,
-                explanation=f"Install {spec.title} in user space with Homebrew package `{package}`.",
+                explanation=(
+                    f"Install {spec.title} in user space with Homebrew package `{package}`."
+                ),
                 risk=bootstrap._install_risk("brew"),
                 requires_sudo=bootstrap._requires_sudo(command),
                 dependencies=tuple(dependency.tool_id for dependency in spec.tool_dependencies),
