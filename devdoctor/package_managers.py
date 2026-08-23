@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Iterable, Mapping
 
 from devdoctor.utils import parse_version, read_os_release, run_command
 
@@ -247,9 +247,13 @@ def is_atomic_host(
         return True
     if release_data.get("OSTREE_VERSION"):
         return True
-    installed = {manager.id for manager in (managers or detect_package_managers()) if manager.installed}
-    return distro_id in {"fedora", "ublue", "universal-blue"} and "rpm-ostree" in installed and (
-        variant_id in ATOMIC_VARIANTS or bool(release_data.get("OSTREE_VERSION"))
+    installed = {
+        manager.id for manager in (managers or detect_package_managers()) if manager.installed
+    }
+    return (
+        distro_id in {"fedora", "ublue", "universal-blue"}
+        and "rpm-ostree" in installed
+        and (variant_id in ATOMIC_VARIANTS or bool(release_data.get("OSTREE_VERSION")))
     )
 
 
@@ -277,7 +281,9 @@ def package_manager_conflicts(
         )
 
     system_managers = tuple(sorted(installed.intersection(SYSTEM_MUTATION_MANAGERS)))
-    native_without_query_helpers = tuple(manager for manager in system_managers if manager != "rpm-ostree")
+    native_without_query_helpers = tuple(
+        manager for manager in system_managers if manager != "rpm-ostree"
+    )
     if len(native_without_query_helpers) > 1:
         conflicts.append(
             PackageManagerConflict(
@@ -285,8 +291,8 @@ def package_manager_conflicts(
                 managers=native_without_query_helpers,
                 severity="medium",
                 message=(
-                    "Multiple system package managers are on PATH. DevDoctor will use distro policy "
-                    "instead of whichever executable happens to appear first."
+                    "Multiple system package managers are on PATH. DevDoctor will use distro "
+                    "policy instead of whichever executable happens to appear first."
                 ),
             )
         )
@@ -378,7 +384,10 @@ def install_plan_for_tool(tool_id: str, tool_title: str) -> InstallPlan | None:
                 note="Pacman installs packages from configured Arch-compatible repositories.",
             )
 
-    if distro_id in {"opensuse", "opensuse-tumbleweed", "opensuse-leap", "sles"} or "suse" in distro_like:
+    if (
+        distro_id in {"opensuse", "opensuse-tumbleweed", "opensuse-leap", "sles"}
+        or "suse" in distro_like
+    ):
         package = ZYPPER_PACKAGES.get(tool_id)
         if package:
             return InstallPlan(
