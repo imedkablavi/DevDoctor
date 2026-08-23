@@ -1,0 +1,94 @@
+name: Distro package-manager integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ubuntu / APT planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh -lc '
+            apt-get update >/dev/null &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip >/dev/null &&
+            python3 -m pip install --break-system-packages /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py \
+              --expected-manager apt --expected-plan-manager apt
+          '
+
+      - name: Fedora / DNF planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src fedora:42 sh -lc '
+            dnf install -y python3 python3-pip >/dev/null &&
+            python3 -m pip install /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py \
+              --expected-manager dnf --expected-plan-manager dnf
+          '
+
+      - name: Arch / Pacman planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src archlinux:base sh -lc '
+            pacman -Sy --noconfirm python python-pip >/dev/null &&
+            python -m pip install --break-system-packages /src >/dev/null &&
+            python /src/tests/integration/container_probe.py \
+              --expected-manager pacman --expected-plan-manager pacman
+          '
+
+      - name: openSUSE / Zypper planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src opensuse/tumbleweed sh -lc '
+            zypper --non-interactive refresh >/dev/null &&
+            zypper --non-interactive install python3 python3-pip >/dev/null &&
+            python3 -m pip install --break-system-packages /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py \
+              --expected-manager zypper --expected-plan-manager zypper
+          '
+
+      - name: Flatpak detection in clean Ubuntu container
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh -lc '
+            apt-get update >/dev/null &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip flatpak >/dev/null &&
+            python3 -m pip install --break-system-packages /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py --expected-manager flatpak
+          '
+
+      - name: Nix detection in clean Ubuntu container
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh -lc '
+            apt-get update >/dev/null &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip nix-bin >/dev/null &&
+            python3 -m pip install --break-system-packages /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py --expected-manager nix
+          '
+
+      - name: Fedora Atomic synthetic policy / rpm-ostree planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src fedora:42 sh -lc '
+            dnf install -y python3 python3-pip rpm-ostree >/dev/null &&
+            printf "ID=fedora\nVARIANT_ID=silverblue\nOSTREE_VERSION=42.1\nPRETTY_NAME=Fedora-Silverblue-Synthetic\n" > /etc/os-release &&
+            python3 -m pip install /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py \
+              --expected-manager rpm-ostree \
+              --expected-plan-manager rpm-ostree \
+              --forbid-plan-manager dnf \
+              --expected-conflict atomic-host-dnf
+          '
+
+      - name: Bazzite synthetic policy / rpm-ostree planning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src fedora:42 sh -lc '
+            dnf install -y python3 python3-pip rpm-ostree >/dev/null &&
+            printf "ID=bazzite\nID_LIKE=fedora\nVARIANT_ID=bazzite\nPRETTY_NAME=Bazzite-Synthetic\n" > /etc/os-release &&
+            python3 -m pip install /src >/dev/null &&
+            python3 /src/tests/integration/container_probe.py \
+              --expected-manager rpm-ostree \
+              --expected-plan-manager rpm-ostree \
+              --forbid-plan-manager dnf \
+              --expected-conflict atomic-host-dnf
+          '
