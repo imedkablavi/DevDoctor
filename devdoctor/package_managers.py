@@ -1,9 +1,10 @@
-"""Package manager detection and install command planning."""
+"""Package manager detection, host policy, and safe install planning."""
 
 from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
+from typing import Iterable, Mapping
 
 from devdoctor.utils import parse_version, read_os_release, run_command
 
@@ -20,6 +21,16 @@ class PackageManagerInfo:
     family: str
     version: str | None
     command_hint: str
+
+
+@dataclass(frozen=True, slots=True)
+class PackageManagerConflict:
+    """A package-manager combination that deserves explicit user review."""
+
+    kind: str
+    managers: tuple[str, ...]
+    severity: str
+    message: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +55,7 @@ PACKAGE_MANAGERS: tuple[tuple[str, str, str, str, str], ...] = (
     ("zypper", "Zypper", "zypper", "system", "sudo zypper install <package>"),
     ("xbps", "XBPS", "xbps-install", "system", "sudo xbps-install <package>"),
     ("apk", "APK", "apk", "system", "sudo apk add <package>"),
-    ("rpm", "RPM", "rpm", "system", "rpm -qa"),
+    ("rpm", "RPM", "rpm", "system-query", "rpm -qa"),
     ("nix", "Nix", "nix", "user", "nix profile install <package>"),
     ("flatpak", "Flatpak", "flatpak", "desktop", "flatpak install <remote> <app>"),
     ("snap", "Snap", "snap", "desktop", "sudo snap install <package>"),
@@ -122,6 +133,23 @@ PACMAN_PACKAGES = {
     "tool.terraform": "terraform",
 }
 
+ZYPPER_PACKAGES = {
+    "tool.git": "git",
+    "tool.python": "python3 python3-pip",
+    "tool.docker": "docker",
+    "tool.podman": "podman",
+    "tool.node": "nodejs npm",
+    "tool.npm": "npm",
+    "tool.rust": "rust cargo",
+    "tool.cargo": "cargo",
+    "tool.go": "go",
+    "tool.java": "java-openjdk-devel",
+    "tool.github_cli": "gh",
+    "tool.kubectl": "kubectl",
+    "tool.helm": "helm",
+    "tool.terraform": "terraform",
+}
+
 BREW_PACKAGES = {
     "tool.git": "git",
     "tool.python": "python",
@@ -140,6 +168,39 @@ BREW_PACKAGES = {
     "tool.helm": "helm",
     "tool.terraform": "terraform",
 }
+
+NIX_PACKAGES = {
+    "tool.git": "nixpkgs#git",
+    "tool.python": "nixpkgs#python3",
+    "tool.podman": "nixpkgs#podman",
+    "tool.node": "nixpkgs#nodejs",
+    "tool.npm": "nixpkgs#nodejs",
+    "tool.pnpm": "nixpkgs#pnpm",
+    "tool.bun": "nixpkgs#bun",
+    "tool.rust": "nixpkgs#rustup",
+    "tool.cargo": "nixpkgs#rustup",
+    "tool.go": "nixpkgs#go",
+    "tool.java": "nixpkgs#jdk",
+    "tool.github_cli": "nixpkgs#gh",
+    "tool.kubectl": "nixpkgs#kubectl",
+    "tool.helm": "nixpkgs#kubernetes-helm",
+    "tool.terraform": "nixpkgs#terraform",
+}
+
+ATOMIC_VARIANTS = {
+    "atomic",
+    "silverblue",
+    "kinoite",
+    "sericea",
+    "sway-atomic",
+    "onyx",
+    "budgie-atomic",
+    "bazzite",
+    "bluefin",
+    "aurora",
+}
+
+SYSTEM_MUTATION_MANAGERS = {"apt", "dnf", "rpm-ostree", "pacman", "zypper", "xbps", "apk"}
 
 
 def detect_package_managers() -> tuple[PackageManagerInfo, ...]:
@@ -172,38 +233,115 @@ def _manager_version(path: str | None) -> str | None:
     return parse_version(result.combined_output)
 
 
+def is_atomic_host(
+    release: Mapping[str, str] | None = None,
+    managers: Iterable[PackageManagerInfo] | None = None,
+) -> bool:
+    """Return whether host package mutation should be treated as image-based."""
+
+    release_data = dict(release or read_os_release())
+    distro_id = release_data.get("ID", "").lower()
+    variant_id = release_data.get("VARIANT_ID", "").lower()
+    image_id = release_data.get("IMAGE_ID", "").lower()
+    if distro_id == "bazzite" or variant_id in ATOMIC_VARIANTS or image_id in ATOMIC_VARIANTS:
+        return True
+    if release_data.get("OSTREE_VERSION"):
+        return True
+    installed = {manager.id for manager in (managers or detect_package_managers()) if manager.installed}
+    return distro_id in {"fedora", "ublue", "universal-blue"} and "rpm-ostree" in installed and (
+        variant_id in ATOMIC_VARIANTS or bool(release_data.get("OSTREE_VERSION"))
+    )
+
+
+def package_manager_conflicts(
+    managers: Iterable[PackageManagerInfo],
+    release: Mapping[str, str] | None = None,
+) -> tuple[PackageManagerConflict, ...]:
+    """Identify mixed-manager states that can cause unsafe or misleading repair plans."""
+
+    manager_tuple = tuple(managers)
+    installed = {manager.id for manager in manager_tuple if manager.installed}
+    conflicts: list[PackageManagerConflict] = []
+
+    if is_atomic_host(release, manager_tuple) and "dnf" in installed:
+        conflicts.append(
+            PackageManagerConflict(
+                kind="atomic-host-dnf",
+                managers=("rpm-ostree", "dnf"),
+                severity="high",
+                message=(
+                    "Image-based Fedora/Bazzite host detected. DNF may be present for queries or "
+                    "containers, but DevDoctor must not recommend it for host mutations."
+                ),
+            )
+        )
+
+    system_managers = tuple(sorted(installed.intersection(SYSTEM_MUTATION_MANAGERS)))
+    native_without_query_helpers = tuple(manager for manager in system_managers if manager != "rpm-ostree")
+    if len(native_without_query_helpers) > 1:
+        conflicts.append(
+            PackageManagerConflict(
+                kind="multiple-system-managers",
+                managers=native_without_query_helpers,
+                severity="medium",
+                message=(
+                    "Multiple system package managers are on PATH. DevDoctor will use distro policy "
+                    "instead of whichever executable happens to appear first."
+                ),
+            )
+        )
+
+    if {"npm", "pnpm", "yarn"}.issubset(installed):
+        conflicts.append(
+            PackageManagerConflict(
+                kind="node-global-manager-overlap",
+                managers=("npm", "pnpm", "yarn"),
+                severity="low",
+                message=(
+                    "Multiple Node global package managers are installed; duplicate global tools "
+                    "and PATH shadowing are possible."
+                ),
+            )
+        )
+
+    return tuple(conflicts)
+
+
 def install_plan_for_tool(tool_id: str, tool_title: str) -> InstallPlan | None:
     """Return a distro-aware install plan for a known missing tool."""
 
     release = read_os_release()
     distro_id = release.get("ID", "").lower()
     distro_like = {item.lower() for item in release.get("ID_LIKE", "").split()}
+    managers = detect_package_managers()
+    installed = {manager.id for manager in managers if manager.installed}
 
-    if distro_id == "bazzite":
+    if is_atomic_host(release, managers):
         package = BREW_PACKAGES.get(tool_id)
-        if shutil.which("brew") and package:
+        if "brew" in installed and package:
             return InstallPlan(
                 tool_id=tool_id,
                 tool_title=tool_title,
                 command=f"brew install {package}",
                 manager="Homebrew",
                 note=(
-                    "Bazzite is image-based; Homebrew keeps developer tools in user space "
-                    "without layering system packages."
+                    "Image-based host detected; Homebrew keeps developer tools in user space "
+                    "without layering the base image."
                 ),
             )
         package = DNF_PACKAGES.get(tool_id)
-        if package:
+        if "rpm-ostree" in installed and package:
             return InstallPlan(
                 tool_id=tool_id,
                 tool_title=tool_title,
                 command=f"rpm-ostree install {package}",
                 manager="rpm-ostree",
                 note=(
-                    "Bazzite uses rpm-ostree for system layering. Reboot after layering "
-                    "packages, or prefer Homebrew/distrobox for developer tools."
+                    "Image-based host detected. This creates a layered deployment and may require "
+                    "a reboot; DevDoctor never substitutes dnf for host mutation."
                 ),
             )
+        return None
 
     if distro_id in {"ubuntu", "debian", "linuxmint", "pop"} or distro_like.intersection(
         {"ubuntu", "debian"}
@@ -226,7 +364,7 @@ def install_plan_for_tool(tool_id: str, tool_title: str) -> InstallPlan | None:
                 tool_title=tool_title,
                 command=f"sudo dnf install {package}",
                 manager="DNF",
-                note="DNF is the native Fedora package manager.",
+                note="DNF is the native package manager for mutable Fedora systems.",
             )
 
     if distro_id in {"arch", "manjaro"} or "arch" in distro_like:
@@ -240,13 +378,34 @@ def install_plan_for_tool(tool_id: str, tool_title: str) -> InstallPlan | None:
                 note="Pacman installs packages from configured Arch-compatible repositories.",
             )
 
+    if distro_id in {"opensuse", "opensuse-tumbleweed", "opensuse-leap", "sles"} or "suse" in distro_like:
+        package = ZYPPER_PACKAGES.get(tool_id)
+        if package:
+            return InstallPlan(
+                tool_id=tool_id,
+                tool_title=tool_title,
+                command=f"sudo zypper install {package}",
+                manager="Zypper",
+                note="Zypper is the native package manager for SUSE-family systems.",
+            )
+
     package = BREW_PACKAGES.get(tool_id)
-    if shutil.which("brew") and package:
+    if "brew" in installed and package:
         return InstallPlan(
             tool_id=tool_id,
             tool_title=tool_title,
             command=f"brew install {package}",
             manager="Homebrew",
             note="Homebrew is available and can install this developer tool without sudo.",
+        )
+
+    package = NIX_PACKAGES.get(tool_id)
+    if "nix" in installed and package:
+        return InstallPlan(
+            tool_id=tool_id,
+            tool_title=tool_title,
+            command=f"nix profile install {package}",
+            manager="Nix",
+            note="Nix is available; this plan installs into the current user profile.",
         )
     return None
