@@ -65,7 +65,10 @@ def _new_transaction_id() -> str:
 
 
 def _transaction_path(transaction_id: str) -> Path:
-    if not transaction_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in transaction_id):
+    if not transaction_id or any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+        for character in transaction_id
+    ):
         raise ValueError("invalid transaction id")
     return _transactions_dir() / f"{transaction_id}.json"
 
@@ -133,7 +136,9 @@ def register_repair_transaction_commands(app: typer.Typer) -> None:
             None,
             help="Optional tool IDs. Only repairs with a known rollback command are executable.",
         ),
-        apply: bool = typer.Option(False, "--apply", help="Execute after preview and confirmation."),
+        apply: bool = typer.Option(
+            False, "--apply", help="Execute after preview and confirmation."
+        ),
         yes: bool = typer.Option(False, "--yes", "-y", help="Skip per-action confirmation."),
     ) -> None:
         """Preview or execute rollback-capable repair actions."""
@@ -233,7 +238,10 @@ def register_repair_transaction_commands(app: typer.Typer) -> None:
                 continue
             command = tuple(str(part) for part in record.get("rollback_command", ()))
             if not command or not _allowed_rollback_command(command):
-                typer.echo(f"Blocked unrecognized rollback command for {record.get('tool_id', 'unknown')}.")
+                typer.echo(
+                    "Blocked unrecognized rollback command for "
+                    f"{record.get('tool_id', 'unknown')}."
+                )
                 continue
             record["_rollback_tuple"] = command
             candidates.append(record)
