@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from devdoctor.cli import app
 from devdoctor.hardening import apply_runtime_hardening, register_hardening_commands
+from devdoctor.path_conflicts import register_path_conflict_command
 
 
 def main() -> None:
@@ -11,4 +12,5 @@ def main() -> None:
 
     apply_runtime_hardening()
     register_hardening_commands(app)
+    register_path_conflict_command(app)
     app()
