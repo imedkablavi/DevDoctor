@@ -15,6 +15,25 @@ Good questions include:
 - Linux distribution and version
 - relevant terminal output
 
+For package-manager and distribution behavior, see [docs/SUPPORTED_DISTROS.md](docs/SUPPORTED_DISTROS.md). The support matrix distinguishes fixture coverage, clean-wheel verification, real host integration, and manual workstation testing.
+
+## Diagnostic export
+
+Prefer the scrubbed diagnostic command when opening a support request:
+
+```sh
+devdoctor diagnostics --output devdoctor-diagnostics.json
+```
+
+The diagnostic snapshot intentionally omits the hostname, username, raw PATH values, and arbitrary environment-variable values. Review the generated file before attaching it because no diagnostic exporter can infer every locally sensitive identifier.
+
+For executable shadowing or mixed package-manager problems, these read-only commands are useful:
+
+```sh
+devdoctor manager-conflicts
+devdoctor path-conflicts
+```
+
 ## Bugs
 
 Use the bug report template:
