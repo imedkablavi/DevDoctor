@@ -57,7 +57,11 @@ def main() -> int:
                 raise AssertionError(
                     f"expected plan manager {args.expected_plan_manager!r}, got {plan.manager!r}"
                 )
-        if args.forbid_plan_manager and plan is not None and plan.manager == args.forbid_plan_manager:
+        if (
+            args.forbid_plan_manager
+            and plan is not None
+            and plan.manager == args.forbid_plan_manager
+        ):
             raise AssertionError(f"forbidden plan manager selected: {plan.manager!r}")
 
     print(
