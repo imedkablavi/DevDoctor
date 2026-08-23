@@ -7,8 +7,9 @@ import os
 import platform
 import re
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
+from typing import Any
 
 import typer
 
@@ -19,9 +20,6 @@ from devdoctor.package_managers import (
     package_manager_conflicts,
 )
 from devdoctor.utils import read_os_release
-
-if TYPE_CHECKING:
-    from typer import Typer
 
 _REGISTERED_APP_IDS: set[int] = set()
 
@@ -47,7 +45,9 @@ def atomic_safe_manager_order(
 
     distro_id = release_data.get("ID", "").lower()
     distro_like = {item.lower() for item in release_data.get("ID_LIKE", "").split()}
-    if distro_id in {"ubuntu", "debian", "linuxmint", "pop"} or distro_like.intersection({"debian", "ubuntu"}):
+    if distro_id in {"ubuntu", "debian", "linuxmint", "pop"} or distro_like.intersection(
+        {"debian", "ubuntu"}
+    ):
         order = ("apt", "flatpak", "snap", "brew", "nix", "cargo", "npm", "pipx", "pip")
     elif distro_id == "fedora" or "fedora" in distro_like:
         order = ("dnf", "flatpak", "brew", "nix", "cargo", "npm", "pipx", "pip")
@@ -73,7 +73,9 @@ def _manager_ids_from_inventory(inventory: Any) -> set[str]:
 def _inventory_atomic(inventory: Any) -> bool:
     managers = _manager_ids_from_inventory(inventory)
     system = getattr(inventory, "system", {})
-    distro_id = str(system.get("distribution_id", "")).lower() if isinstance(system, Mapping) else ""
+    distro_id = (
+        str(system.get("distribution_id", "")).lower() if isinstance(system, Mapping) else ""
+    )
     if distro_id == "bazzite":
         return True
     release = read_os_release()
@@ -106,7 +108,17 @@ def apply_runtime_hardening() -> None:
             str(system.get("distribution_id", "")).lower() == "bazzite"
         )
         if atomic:
-            for manager in ("brew", "rpm-ostree", "flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip"):
+            for manager in (
+                "brew",
+                "rpm-ostree",
+                "flatpak",
+                "nix",
+                "cargo",
+                "npm",
+                "pnpm",
+                "pipx",
+                "pip",
+            ):
                 if manager in installed and manager in spec.packages:
                     reason = (
                         "Atomic/image-based host policy: prefer user-space tooling before "
@@ -134,7 +146,9 @@ def apply_runtime_hardening() -> None:
         commands = original_cache_commands(inventory)
         if not _inventory_atomic(inventory):
             return commands
-        return tuple(command for command in commands if not (len(command) > 1 and command[1] == "dnf"))
+        return tuple(
+            command for command in commands if not (len(command) > 1 and command[1] == "dnf")
+        )
 
     bootstrap._preferred_install_manager = preferred_install_manager
     cli._update_commands = update_commands
@@ -147,7 +161,9 @@ def _redact_string(value: str) -> str:
     redacted = value.replace(home, "~") if home else value
     redacted = re.sub(r"/home/[^/\s]+", "/home/<user>", redacted)
     redacted = re.sub(r"/Users/[^/\s]+", "/Users/<user>", redacted)
-    redacted = re.sub(r"(?i)(token|secret|password|passwd|api[_-]?key)=([^\s]+)", r"\1=<redacted>", redacted)
+    redacted = re.sub(
+        r"(?i)(token|secret|password|passwd|api[_-]?key)=([^\s]+)", r"\1=<redacted>", redacted
+    )
     return redacted
 
 
@@ -157,7 +173,11 @@ def _path_class(path: str | None) -> str | None:
     normalized = path.lower()
     if ".linuxbrew" in normalized or "/homebrew/" in normalized:
         return "homebrew"
-    if normalized.startswith("/usr/") or normalized.startswith("/bin/") or normalized.startswith("/sbin/"):
+    if (
+        normalized.startswith("/usr/")
+        or normalized.startswith("/bin/")
+        or normalized.startswith("/sbin/")
+    ):
         return "system"
     if normalized.startswith(str(Path.home()).lower()):
         return "user"
@@ -205,7 +225,9 @@ def safe_diagnostic_snapshot() -> dict[str, Any]:
             for conflict in conflicts
         ],
         "path": {
-            "entry_count": len([entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]),
+            "entry_count": len(
+                [entry for entry in os.environ.get("PATH", "").split(os.pathsep) if entry]
+            ),
             "contains_empty_entry": "" in os.environ.get("PATH", "").split(os.pathsep),
         },
         "privacy": {
@@ -224,21 +246,25 @@ def completion_script(shell: str, commands: Sequence[str], tools: Sequence[str])
     command_words = " ".join(sorted(set(commands)))
     tool_words = " ".join(sorted(set(tools)))
     if normalized == "bash":
-        return f'''_devdoctor_complete() {{
+        return f"""_devdoctor_complete() {{
   local cur prev
   COMPREPLY=()
   cur="${{COMP_WORDS[COMP_CWORD]}}"
   prev="${{COMP_WORDS[COMP_CWORD-1]}}"
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "{command_words}" -- "$cur") )
-  elif [[ "$prev" == "check" || "$prev" == "install" || "$prev" == "repair" || "$prev" == "verify" || "$prev" == "uninstall" ]]; then
-    COMPREPLY=( $(compgen -W "{tool_words}" -- "$cur") )
+  else
+    case "$prev" in
+      check|install|repair|repair-apply|verify|uninstall)
+        COMPREPLY=( $(compgen -W "{tool_words}" -- "$cur") )
+        ;;
+    esac
   fi
 }}
 complete -F _devdoctor_complete devdoctor
-'''
+"""
     if normalized == "zsh":
-        return f'''#compdef devdoctor
+        return f"""#compdef devdoctor
 _devdoctor() {{
   local -a commands tools
   commands=({command_words})
@@ -247,19 +273,20 @@ _devdoctor() {{
     _describe 'command' commands
   else
     case $words[2] in
-      check|install|repair|verify|uninstall) _describe 'tool' tools ;;
+      check|install|repair|repair-apply|verify|uninstall) _describe 'tool' tools ;;
     esac
   fi
 }}
 compdef _devdoctor devdoctor
-'''
+"""
     if normalized == "fish":
         lines = ["complete -c devdoctor -f"]
         for command in sorted(set(commands)):
             lines.append(f"complete -c devdoctor -n '__fish_use_subcommand' -a '{command}'")
-        for command in ("check", "install", "repair", "verify", "uninstall"):
+        for command in ("check", "install", "repair", "repair-apply", "verify", "uninstall"):
             lines.append(
-                f"complete -c devdoctor -n '__fish_seen_subcommand_from {command}' -a '{tool_words}'"
+                f"complete -c devdoctor -n '__fish_seen_subcommand_from {command}' "
+                f"-a '{tool_words}'"
             )
         return "\n".join(lines) + "\n"
     raise ValueError("shell must be one of: bash, zsh, fish")
@@ -286,7 +313,7 @@ def benchmark_local_scan(iterations: int = 3) -> dict[str, Any]:
     }
 
 
-def register_hardening_commands(app: "Typer") -> None:
+def register_hardening_commands(app: typer.Typer) -> None:
     """Register release-hardening commands once on the public Typer app."""
 
     if id(app) in _REGISTERED_APP_IDS:
@@ -302,9 +329,25 @@ def register_hardening_commands(app: "Typer") -> None:
         from devdoctor.bootstrap import get_bootstrap_tools
 
         commands = (
-            "check", "doctor", "verify", "profiles", "search", "install", "repair", "uninstall",
-            "update", "self-update", "export", "health", "completion", "diagnostics", "manager-conflicts",
             "benchmark",
+            "check",
+            "completion",
+            "diagnostics",
+            "doctor",
+            "export",
+            "health",
+            "install",
+            "manager-conflicts",
+            "path-conflicts",
+            "profiles",
+            "repair",
+            "repair-apply",
+            "repair-rollback",
+            "search",
+            "self-update",
+            "uninstall",
+            "update",
+            "verify",
         )
         tools = tuple(spec.id for spec in get_bootstrap_tools())
         try:
@@ -315,7 +358,9 @@ def register_hardening_commands(app: "Typer") -> None:
     @app.command("diagnostics")
     def diagnostics(
         output: Path = typer.Option(Path("devdoctor-diagnostics.json"), "--output", "-o"),
-        stdout: bool = typer.Option(False, "--stdout", help="Print JSON instead of writing a file."),
+        stdout: bool = typer.Option(
+            False, "--stdout", help="Print JSON instead of writing a file."
+        ),
     ) -> None:
         """Export a privacy-scrubbed diagnostic snapshot."""
 
