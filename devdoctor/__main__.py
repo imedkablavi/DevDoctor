@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from devdoctor.cli import app
+from devdoctor.entrypoint import main
 
-app()
+main()
