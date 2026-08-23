@@ -105,7 +105,9 @@ Notes:
 
 - No package install runs unless `--apply` or `--dry-run` is passed.
 - `--dry-run` runs package-manager simulation commands when available.
+- Managers without a trustworthy simulation command are skipped rather than given a fake dry-run.
 - `--yes` skips confirmation prompts and should only be used in controlled scripts.
+- Fedora Atomic/Bazzite host planning suppresses DNF host mutation.
 
 Related commands: `check`, `verify`, `uninstall`.
 
@@ -121,7 +123,36 @@ devdoctor repair --profile flutter
 
 Exit code: `0`. Repair suggestions are not executed by this command.
 
-Related commands: `check`, `install`, `verify`.
+Related commands: `repair-apply`, `check`, `install`, `verify`.
+
+## `devdoctor repair-apply`
+
+Previews or executes only repair recommendations that have both an executable command and a known rollback command.
+
+```bash
+devdoctor repair-apply docker
+devdoctor repair-apply docker --apply
+devdoctor repair-apply docker --apply --yes
+```
+
+Default behavior is preview-only. `--apply` is required to execute. Per-action confirmation is still required unless the caller explicitly supplies `--yes`.
+
+Successful applied actions are recorded in a local repair transaction journal. If a command or its verification fails, execution stops and the journal remains available for a separately confirmed rollback.
+
+Related commands: `repair`, `repair-rollback`.
+
+## `devdoctor repair-rollback`
+
+Previews or executes rollback commands from a DevDoctor repair transaction.
+
+```bash
+devdoctor repair-rollback TRANSACTION_ID
+devdoctor repair-rollback TRANSACTION_ID --apply
+```
+
+The command accepts transaction IDs, not arbitrary journal paths. Persisted rollback commands must match DevDoctor's rollback allowlist. `--apply` and confirmation are independent from the original repair approval; no privileged rollback is automatic.
+
+Related command: `repair-apply`.
 
 ## `devdoctor uninstall`
 
@@ -144,6 +175,8 @@ Previews or runs update commands for detected package managers.
 devdoctor update
 devdoctor update --apply
 ```
+
+On Fedora Atomic/Bazzite, host update policy uses rpm-ostree rather than DNF. The command remains preview-only unless `--apply` is supplied.
 
 Exit code: `0` when commands are printed or complete. Exit code: `1` when no supported package manager update command is detected.
 
@@ -172,9 +205,67 @@ devdoctor export json --output inventory.json
 devdoctor export markdown --output inventory.md
 ```
 
-Exit code: `0` for supported formats. Exit code: `2` for unsupported export formats.
+Exit code: `0` for supported formats. Exit code: `2` for unsupported formats.
 
 Related commands: `devdoctor --json`, `devdoctor --markdown-file`.
+
+## `devdoctor diagnostics`
+
+Exports a support-oriented JSON snapshot that deliberately excludes hostname, username, raw PATH values, and arbitrary environment-variable values.
+
+```bash
+devdoctor diagnostics
+devdoctor diagnostics --output devdoctor-diagnostics.json
+devdoctor diagnostics --stdout
+```
+
+Review any generated diagnostic file before sharing it because local package/version names can still be sensitive in some environments.
+
+Related commands: `manager-conflicts`, `path-conflicts`.
+
+## `devdoctor manager-conflicts`
+
+Reports package-manager overlap and Atomic-host policy conflicts without modifying the system.
+
+```bash
+devdoctor manager-conflicts
+```
+
+Examples include DNF being present on an Atomic host, multiple native system managers on PATH, and overlapping Node global package managers.
+
+## `devdoctor path-conflicts`
+
+Inspects duplicate executable paths, version shadowing, and dpkg/rpm/pacman ownership where available.
+
+```bash
+devdoctor path-conflicts
+devdoctor path-conflicts python node git
+```
+
+This command is read-only and does not remove or relink executables.
+
+## `devdoctor completion`
+
+Prints a shell completion script. DevDoctor does not modify shell profile files automatically.
+
+```bash
+devdoctor completion bash
+devdoctor completion zsh
+devdoctor completion fish
+```
+
+Redirect the output to the shell's normal completion location according to your local shell configuration.
+
+## `devdoctor benchmark`
+
+Measures a bounded local scan without applying changes.
+
+```bash
+devdoctor benchmark
+devdoctor benchmark --iterations 5
+```
+
+For release/CI startup measurements, the repository also contains `scripts/benchmark.py`, which measures fresh-process startup and a bounded inventory scan.
 
 ## `devdoctor list`
 
@@ -199,6 +290,8 @@ Previews or runs supported package-cache cleanup commands.
 devdoctor cache clean
 devdoctor cache clean --apply
 ```
+
+On Fedora Atomic/Bazzite, DNF cache mutation is suppressed by the host policy.
 
 Exit code: `0`.
 
