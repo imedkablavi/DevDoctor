@@ -65,7 +65,9 @@ jobs:
           /tmp/devdoctor-release-check/bin/devdoctor --version
           /tmp/devdoctor-release-check/bin/devdoctor completion bash >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor self-update --help >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor self-update | grep -F devdoctor-cli
+          /tmp/devdoctor-release-check/bin/devdoctor uninstall --help >/dev/null
 
       - name: Add release-specific install script
         run: |
