@@ -54,9 +54,15 @@ jobs:
           devdoctor repair-apply docker
           devdoctor manager-conflicts
           devdoctor path-conflicts git python
+          devdoctor project . --json --no-fail | python -m json.tool >/tmp/devdoctor-project.json
+          devdoctor support --stdout | grep -F '# DevDoctor support report'
           devdoctor completion bash >/tmp/devdoctor.bash
           devdoctor completion zsh >/tmp/_devdoctor
           devdoctor completion fish >/tmp/devdoctor.fish
+          grep -F 'project' /tmp/devdoctor.bash
+          grep -F 'support' /tmp/devdoctor.bash
+          grep -F 'list' /tmp/devdoctor.bash
+          grep -F 'cache' /tmp/devdoctor.bash
           devdoctor diagnostics --stdout | python -m json.tool >/tmp/devdoctor-diagnostics.json
           devdoctor self-update --help >/dev/null
           devdoctor self-update | grep -F devdoctor-workstation
@@ -85,7 +91,13 @@ jobs:
           python -m venv /tmp/devdoctor-clean
           /tmp/devdoctor-clean/bin/python -m pip install --no-cache-dir dist/*.whl
           /tmp/devdoctor-clean/bin/devdoctor --version
-          /tmp/devdoctor-clean/bin/devdoctor completion bash >/dev/null
+          /tmp/devdoctor-clean/bin/devdoctor project . --json --no-fail | /tmp/devdoctor-clean/bin/python -m json.tool >/dev/null
+          /tmp/devdoctor-clean/bin/devdoctor support --stdout | grep -F '# DevDoctor support report'
+          /tmp/devdoctor-clean/bin/devdoctor completion bash >/tmp/devdoctor-wheel.bash
+          grep -F 'project' /tmp/devdoctor-wheel.bash
+          grep -F 'support' /tmp/devdoctor-wheel.bash
+          grep -F 'list' /tmp/devdoctor-wheel.bash
+          grep -F 'cache' /tmp/devdoctor-wheel.bash
           /tmp/devdoctor-clean/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-clean/bin/python -m json.tool >/dev/null
           /tmp/devdoctor-clean/bin/devdoctor self-update --help >/dev/null
           /tmp/devdoctor-clean/bin/devdoctor self-update | grep -F devdoctor-workstation
