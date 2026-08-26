@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -42,18 +43,23 @@ def test_version_satisfies_common_project_constraints(
     assert project_diagnostics.version_satisfies(installed, constraint) is expected
 
 
+def test_version_comparison_ignores_terminal_escape_sequences() -> None:
+    colored = "\x1b[31mPython 3.13.7\x1b[0m"
+
+    assert project_diagnostics.version_satisfies(colored, ">=3.11") is True
+    assert project_diagnostics.version_satisfies(colored, ">=31") is False
+
+
 def test_discovery_reads_common_project_manifests(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\nrequires-python = ">=3.12"\n',
         encoding="utf-8",
     )
-    (tmp_path / "package.json").write_text(
-        "{"
-        '"engines":{"node":">=22","npm":">=10"},'
-        '"packageManager":"pnpm@9.15.0+sha512-example"'
-        "}",
-        encoding="utf-8",
-    )
+    package = {
+        "engines": {"node": ">=22", "npm": ">=10"},
+        "packageManager": "pnpm@9.15.0+sha512-example",
+    }
+    (tmp_path / "package.json").write_text(json.dumps(package), encoding="utf-8")
     (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "demo"\nrust-version = "1.82"\n',
         encoding="utf-8",
@@ -79,9 +85,7 @@ def test_discovery_reads_common_project_manifests(tmp_path: Path) -> None:
     (tmp_path / "composer.json").write_text("{}\n", encoding="utf-8")
     (tmp_path / "pom.xml").write_text("<project/>\n", encoding="utf-8")
 
-    requirements, sources, warnings = project_diagnostics.discover_project_requirements(
-        tmp_path
-    )
+    requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
     triples = {(item.tool_id, item.source, item.constraint) for item in requirements}
 
     assert ("python", "pyproject.toml", ">=3.12") in triples
@@ -177,6 +181,38 @@ def test_invalid_manifests_become_warnings(tmp_path: Path) -> None:
     assert set(sources) == {"package.json", "pyproject.toml"}
     assert "package.json: invalid JSON" in warnings
     assert "pyproject.toml: invalid TOML" in warnings
+
+
+def test_requirement_count_is_bounded(tmp_path: Path) -> None:
+    packages = [f"python@3.{index}" for index in range(project_diagnostics._MAX_REQUIREMENTS * 3)]
+    (tmp_path / "devbox.json").write_text(
+        json.dumps({"packages": packages}),
+        encoding="utf-8",
+    )
+
+    requirements, _, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+
+    assert len(requirements) == project_diagnostics._MAX_REQUIREMENTS
+    assert any("requirement limit reached" in warning for warning in warnings)
+
+
+def test_large_supported_manifest_has_bounded_python_peak_memory(tmp_path: Path) -> None:
+    payload = {
+        "engines": {"node": ">=22"},
+        "padding": "x" * 900_000,
+    }
+    (tmp_path / "package.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    tracemalloc.start()
+    try:
+        requirements, _, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert any(item.tool_id == "node" for item in requirements)
+    assert warnings == ()
+    assert peak < 16 * 1024 * 1024
 
 
 def test_diagnose_project_marks_version_mismatch_and_missing_tool(
