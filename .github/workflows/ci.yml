@@ -31,6 +31,11 @@ jobs:
       - name: Install package
         run: python -m pip install -e ".[dev]"
 
+      - name: Validate installer
+        run: |
+          sh -n scripts/install.sh
+          sh scripts/install.sh --help >/dev/null
+
       - name: Lint
         run: ruff check .
 
