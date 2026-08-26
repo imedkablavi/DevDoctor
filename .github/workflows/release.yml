@@ -37,6 +37,14 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Validate performance and memory budgets
+        run: |
+          python scripts/benchmark.py \
+            --iterations 3 \
+            --max-startup-rss-mib 128 \
+            --max-scan-rss-mib 192 \
+            --output /tmp/devdoctor-release-benchmark.json
+
       - name: Validate installer syntax
         run: |
           sh -n scripts/install.sh
@@ -71,6 +79,8 @@ jobs:
           /tmp/devdoctor-release-check/bin/devdoctor --version
           /tmp/devdoctor-release-check/bin/devdoctor completion bash >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor support --stdout >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor project . --json --no-fail | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor self-update --help >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor self-update | grep -F devdoctor-workstation
           /tmp/devdoctor-release-check/bin/devdoctor uninstall --help >/dev/null
