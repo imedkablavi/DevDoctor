@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import tomllib
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ import typer
 from devdoctor.bootstrap import bootstrap_inventory, get_bootstrap_tools
 
 _MAX_MANIFEST_BYTES = 1_000_000
+_MAX_CONSTRAINT_CHARS = 256
+_MAX_DISPLAY_CHARS = 240
 _REGISTERED_APP_IDS: set[int] = set()
 _TOOL_ALIASES = {
     "python": "python",
@@ -105,6 +108,40 @@ class ProjectReport:
         }
 
 
+def _safe_display_text(value: object, *, max_chars: int = _MAX_DISPLAY_CHARS) -> str:
+    """Remove terminal control/format characters and bound untrusted display text."""
+
+    rendered: list[str] = []
+    for character in str(value):
+        if character in {"\n", "\r", "\t"}:
+            rendered.append(" ")
+            continue
+        if unicodedata.category(character).startswith("C"):
+            continue
+        rendered.append(character)
+    normalized = " ".join("".join(rendered).split())
+    if len(normalized) <= max_chars:
+        return normalized
+    if max_chars <= 3:
+        return normalized[:max_chars]
+    return normalized[: max_chars - 3] + "..."
+
+
+def _normalize_constraint(constraint: str | None) -> str | None:
+    """Keep version expressions bounded and ASCII-safe before comparing/displaying them."""
+
+    if not isinstance(constraint, str) or not constraint.strip():
+        return None
+    ascii_only = "".join(
+        character if 32 <= ord(character) <= 126 else " "
+        for character in constraint
+    )
+    normalized = " ".join(ascii_only.split())
+    if len(normalized) > _MAX_CONSTRAINT_CHARS:
+        return "<unsupported: constraint too long>"
+    return normalized or None
+
+
 def _safe_manifest_text(path: Path, *, root: Path) -> tuple[str | None, str | None]:
     """Read a small in-project text manifest without following symlinks."""
 
@@ -137,15 +174,10 @@ def _add_requirement(
     tool_id = _TOOL_ALIASES.get(tool.lower())
     if tool_id is None:
         return
-    normalized = (
-        constraint.strip()
-        if isinstance(constraint, str) and constraint.strip()
-        else None
-    )
     requirement = ProjectRequirement(
         tool_id=tool_id,
         source=source,
-        constraint=normalized,
+        constraint=_normalize_constraint(constraint),
         reason=reason,
     )
     if requirement not in requirements:
@@ -437,7 +469,8 @@ def discover_project_requirements(
 
     project_root = root.expanduser().resolve()
     if not project_root.is_dir():
-        raise ValueError(f"project path is not a directory: {root}")
+        display_path = _safe_display_text(root)
+        raise ValueError(f"project path is not a directory: {display_path}")
 
     requirements: list[ProjectRequirement] = []
     warnings: list[str] = []
@@ -666,8 +699,9 @@ def diagnose_project(root: Path) -> ProjectReport:
 
     project_root = root.expanduser().resolve()
     requirements, sources, warnings = discover_project_requirements(project_root)
+    project_name = _safe_display_text(project_root.name, max_chars=120) or "project"
     if not requirements:
-        return ProjectReport(project_root.name, sources, (), warnings)
+        return ProjectReport(project_name, sources, (), warnings)
 
     catalog_ids = {spec.id for spec in get_bootstrap_tools()}
     requested_ids = tuple(
@@ -732,19 +766,24 @@ def diagnose_project(root: Path) -> ProjectReport:
             message = (
                 "installed tool was found, but the version constraint is not safely comparable"
             )
+        installed_version = (
+            _safe_display_text(detection.version)
+            if detection.version
+            else None
+        )
         checks.append(
             ProjectCheck(
                 tool_id=requirement.tool_id,
                 source=requirement.source,
                 constraint=requirement.constraint,
                 installed=True,
-                installed_version=detection.version,
+                installed_version=installed_version,
                 status=status,
                 message=message,
             )
         )
 
-    return ProjectReport(project_root.name, sources, tuple(checks), warnings)
+    return ProjectReport(project_name, sources, tuple(checks), warnings)
 
 
 def render_project_report(report: ProjectReport) -> str:
