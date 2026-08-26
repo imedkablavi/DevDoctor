@@ -17,6 +17,7 @@ from devdoctor.bootstrap import bootstrap_inventory, get_bootstrap_tools
 _MAX_MANIFEST_BYTES = 1_000_000
 _MAX_CONSTRAINT_CHARS = 256
 _MAX_DISPLAY_CHARS = 240
+_MAX_REQUIREMENTS = 128
 _REGISTERED_APP_IDS: set[int] = set()
 _TOOL_ALIASES = {
     "python": "python",
@@ -109,16 +110,18 @@ class ProjectReport:
 
 
 def _safe_display_text(value: object, *, max_chars: int = _MAX_DISPLAY_CHARS) -> str:
-    """Remove terminal control/format characters and bound untrusted display text."""
+    """Remove control characters while bounding work and output memory."""
 
     rendered: list[str] = []
     for character in str(value):
         if character in {"\n", "\r", "\t"}:
-            rendered.append(" ")
-            continue
-        if unicodedata.category(character).startswith("C"):
+            character = " "
+        elif unicodedata.category(character).startswith("C"):
             continue
         rendered.append(character)
+        if len(rendered) > max_chars:
+            break
+
     normalized = " ".join("".join(rendered).split())
     if len(normalized) <= max_chars:
         return normalized
@@ -128,22 +131,20 @@ def _safe_display_text(value: object, *, max_chars: int = _MAX_DISPLAY_CHARS) ->
 
 
 def _normalize_constraint(constraint: str | None) -> str | None:
-    """Keep version expressions bounded and ASCII-safe before comparing/displaying them."""
+    """Keep version expressions bounded and ASCII-safe before comparing them."""
 
     if not isinstance(constraint, str) or not constraint.strip():
         return None
-    ascii_only = "".join(
-        character if 32 <= ord(character) <= 126 else " "
-        for character in constraint
-    )
-    normalized = " ".join(ascii_only.split())
-    if len(normalized) > _MAX_CONSTRAINT_CHARS:
+    if len(constraint) > _MAX_CONSTRAINT_CHARS:
         return "<unsupported: constraint too long>"
-    return normalized or None
+    ascii_only = "".join(
+        character if 32 <= ord(character) <= 126 else " " for character in constraint
+    )
+    return " ".join(ascii_only.split()) or None
 
 
 def _safe_manifest_text(path: Path, *, root: Path) -> tuple[str | None, str | None]:
-    """Read a small in-project text manifest without following symlinks."""
+    """Read a bounded in-project UTF-8 manifest without following symlinks."""
 
     try:
         relative = path.relative_to(root).as_posix()
@@ -157,10 +158,15 @@ def _safe_manifest_text(path: Path, *, root: Path) -> tuple[str | None, str | No
         return None, f"{relative}: unable to stat manifest ({exc.__class__.__name__})"
     if stat.st_size > _MAX_MANIFEST_BYTES:
         return None, f"{relative}: manifest exceeds {_MAX_MANIFEST_BYTES} bytes"
+
     try:
-        return path.read_text(encoding="utf-8"), None
+        with path.open("r", encoding="utf-8", errors="strict") as handle:
+            text = handle.read(_MAX_MANIFEST_BYTES + 1)
     except (OSError, UnicodeError) as exc:
         return None, f"{relative}: unable to read UTF-8 manifest ({exc.__class__.__name__})"
+    if len(text) > _MAX_MANIFEST_BYTES:
+        return None, f"{relative}: manifest exceeds {_MAX_MANIFEST_BYTES} characters"
+    return text, None
 
 
 def _add_requirement(
@@ -171,6 +177,8 @@ def _add_requirement(
     constraint: str | None,
     reason: str,
 ) -> None:
+    if len(requirements) >= _MAX_REQUIREMENTS:
+        return
     tool_id = _TOOL_ALIASES.get(tool.lower())
     if tool_id is None:
         return
@@ -191,10 +199,7 @@ def _has_requirement(
     source: str,
 ) -> bool:
     tool_id = _TOOL_ALIASES.get(tool.lower())
-    return any(
-        item.tool_id == tool_id and item.source == source
-        for item in requirements
-    )
+    return any(item.tool_id == tool_id and item.source == source for item in requirements)
 
 
 def _parse_pyproject(
@@ -208,10 +213,10 @@ def _parse_pyproject(
         warnings.append("pyproject.toml: invalid TOML")
         return
 
-    recognized_python_project = False
+    recognized = False
     project = document.get("project")
     if isinstance(project, dict):
-        recognized_python_project = True
+        recognized = True
         requires_python = project.get("requires-python")
         if isinstance(requires_python, str):
             _add_requirement(
@@ -226,7 +231,7 @@ def _parse_pyproject(
     if isinstance(tool, dict):
         poetry = tool.get("poetry")
         if isinstance(poetry, dict):
-            recognized_python_project = True
+            recognized = True
             dependencies = poetry.get("dependencies")
             if isinstance(dependencies, dict):
                 python_constraint = dependencies.get("python")
@@ -239,7 +244,7 @@ def _parse_pyproject(
                         reason="tool.poetry.dependencies.python",
                     )
 
-    if recognized_python_project and not _has_requirement(
+    if recognized and not _has_requirement(
         requirements,
         tool="python",
         source="pyproject.toml",
@@ -318,20 +323,18 @@ def _parse_package_json(
 
 def _parse_tool_versions(text: str, requirements: list[ProjectRequirement]) -> None:
     for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
+        parts = raw_line.strip().split()
+        if len(parts) < 2 or parts[0].startswith("#"):
             continue
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        tool, version = parts[0], parts[1]
         _add_requirement(
             requirements,
-            tool=tool,
+            tool=parts[0],
             source=".tool-versions",
-            constraint=version,
+            constraint=parts[1],
             reason="version-manager declaration",
         )
+        if len(requirements) >= _MAX_REQUIREMENTS:
+            return
 
 
 def _mise_constraint(value: Any) -> str | None:
@@ -369,6 +372,8 @@ def _parse_mise(
                 constraint=constraint,
                 reason="mise tools declaration",
             )
+        if len(requirements) >= _MAX_REQUIREMENTS:
+            return
 
 
 def _parse_cargo(
@@ -410,22 +415,13 @@ def _parse_cargo(
 
 def _parse_go_mod(text: str, requirements: list[ProjectRequirement]) -> None:
     match = re.search(r"(?m)^go\s+([0-9]+(?:\.[0-9]+){1,2})\s*$", text)
-    if match:
-        _add_requirement(
-            requirements,
-            tool="go",
-            source="go.mod",
-            constraint=f">={match.group(1)}",
-            reason="go language version",
-        )
-    else:
-        _add_requirement(
-            requirements,
-            tool="go",
-            source="go.mod",
-            constraint=None,
-            reason="Go module manifest",
-        )
+    _add_requirement(
+        requirements,
+        tool="go",
+        source="go.mod",
+        constraint=f">={match.group(1)}" if match else None,
+        reason="go language version" if match else "Go module manifest",
+    )
 
 
 def _parse_devbox(
@@ -442,24 +438,25 @@ def _parse_devbox(
         return
 
     packages = document.get("packages")
-    values: list[str] = []
     if isinstance(packages, list):
-        values = [value for value in packages if isinstance(value, str)]
+        values = (value for value in packages if isinstance(value, str))
     elif isinstance(packages, dict):
-        values = [str(value) for value in packages]
+        values = (str(value) for value in packages)
+    else:
+        return
 
     for package in values:
         name, separator, version = package.partition("@")
-        tool = _TOOL_ALIASES.get(name.lower())
-        if tool is None:
-            continue
-        _add_requirement(
-            requirements,
-            tool=tool,
-            source="devbox.json",
-            constraint=version if separator and version != "latest" else None,
-            reason="Devbox package declaration",
-        )
+        if name.lower() in _TOOL_ALIASES:
+            _add_requirement(
+                requirements,
+                tool=name,
+                source="devbox.json",
+                constraint=version if separator and version != "latest" else None,
+                reason="Devbox package declaration",
+            )
+        if len(requirements) >= _MAX_REQUIREMENTS:
+            return
 
 
 def discover_project_requirements(
@@ -502,12 +499,7 @@ def discover_project_requirements(
     for name in ("mise.toml", ".mise.toml"):
         text = read(name)
         if text is not None:
-            _parse_mise(
-                text,
-                source=name,
-                requirements=requirements,
-                warnings=warnings,
-            )
+            _parse_mise(text, source=name, requirements=requirements, warnings=warnings)
 
     text = read("Cargo.toml")
     if text is not None:
@@ -573,13 +565,18 @@ def discover_project_requirements(
                 reason="Java build manifest",
             )
 
+    if len(requirements) >= _MAX_REQUIREMENTS:
+        warnings.append(
+            f"project requirement limit reached ({_MAX_REQUIREMENTS}); additional entries ignored"
+        )
     return tuple(requirements), tuple(sources), tuple(warnings)
 
 
 def _numeric_version(value: str | None) -> tuple[int, ...] | None:
     if not value:
         return None
-    match = re.search(r"\d+(?:\.\d+){0,3}", value)
+    safe_value = _safe_display_text(value, max_chars=128)
+    match = re.search(r"\d+(?:\.\d+){0,3}", safe_value)
     if not match:
         return None
     return tuple(int(part) for part in match.group(0).split("."))
@@ -601,7 +598,7 @@ def _compatible_upper_bound(required: tuple[int, ...]) -> tuple[int, ...] | None
         return None
     prefix = list(required[:-1])
     prefix[-1] += 1
-    return tuple(prefix + [0])
+    return tuple([*prefix, 0])
 
 
 def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
@@ -643,10 +640,11 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
             upper = (0, 0, patch + 1)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~":
-        if len(required) > 1:
-            upper = (required[0], required[1] + 1, 0)
-        else:
-            upper = (required[0] + 1, 0, 0)
+        upper = (
+            (required[0], required[1] + 1, 0)
+            if len(required) > 1
+            else (required[0] + 1, 0, 0)
+        )
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~=":
         upper = _compatible_upper_bound(required)
@@ -660,20 +658,22 @@ def version_satisfies(
     installed_version: str | None,
     constraint: str | None,
 ) -> bool | None:
-    """Evaluate common Python/Node/version-manager constraints conservatively."""
+    """Evaluate common numeric constraints conservatively."""
 
     if constraint is None:
         return True
-    normalized = constraint.strip().lower()
-    if normalized in {"", "*", "latest", "system"}:
+    normalized = _normalize_constraint(constraint)
+    if normalized is None or normalized.lower() in {"", "*", "latest", "system"}:
         return True
+    if normalized.startswith("<unsupported:"):
+        return None
 
     installed = _numeric_version(installed_version)
     if installed is None:
         return None
 
     results: list[bool | None] = []
-    for alternative in constraint.split("||"):
+    for alternative in normalized.split("||"):
         group = alternative.strip()
         if not group:
             continue
@@ -695,7 +695,7 @@ def version_satisfies(
 
 
 def diagnose_project(root: Path) -> ProjectReport:
-    """Compare discovered project requirements with DevDoctor's local tool detections."""
+    """Compare discovered project requirements with local tool detections."""
 
     project_root = root.expanduser().resolve()
     requirements, sources, warnings = discover_project_requirements(project_root)
@@ -715,10 +715,7 @@ def diagnose_project(root: Path) -> ProjectReport:
     )
     inventory = bootstrap_inventory(include_ids=requested_ids) if requested_ids else None
     detections = (
-        {
-            detection.spec.id: detection
-            for detection in inventory.detections
-        }
+        {detection.spec.id: detection for detection in inventory.detections}
         if inventory is not None
         else {}
     )
@@ -763,14 +760,8 @@ def diagnose_project(root: Path) -> ProjectReport:
             message = "installed version does not satisfy the discovered requirement"
         else:
             status = "unknown"
-            message = (
-                "installed tool was found, but the version constraint is not safely comparable"
-            )
-        installed_version = (
-            _safe_display_text(detection.version)
-            if detection.version
-            else None
-        )
+            message = "installed tool was found, but the version constraint is not safely comparable"
+        installed_version = _safe_display_text(detection.version) if detection.version else None
         checks.append(
             ProjectCheck(
                 tool_id=requirement.tool_id,
@@ -808,8 +799,7 @@ def render_project_report(report: ProjectReport) -> str:
                 f"{labels[check.status]:8} {check.tool_id:10} found={version} "
                 f"required={constraint} source={check.source}"
             )
-    for warning in report.warnings:
-        lines.append(f"WARNING  {warning}")
+    lines.extend(f"WARNING  {warning}" for warning in report.warnings)
     return "\n".join(lines) + "\n"
 
 
