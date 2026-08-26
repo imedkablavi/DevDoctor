@@ -10,7 +10,7 @@ Executable: `devdoctor`
 
 **Do not tag `v1.2.0rc1` yet.**
 
-The release-candidate code and release pipeline are prepared, but the final PR head must run through the complete GitHub Actions matrix before a tag is created. Passing workflows from earlier commits remain useful evidence, but they do not qualify the current release commit after distribution metadata, installer, project diagnostics, support reporting, safety tests, and release workflow changed.
+The release-candidate code and release pipeline are prepared, but the final PR head must run through the complete GitHub Actions matrix before a tag is created. Passing workflows from earlier commits remain useful evidence, but they do not qualify the current release commit after distribution metadata, installer, project diagnostics, support reporting, safety tests, memory budgets, and release workflow changed.
 
 The distribution name was changed before first publication because `devdoctor-cli` is already used by another public project. DevDoctor keeps its product name and `devdoctor` console command; only the Python distribution identifier changes to `devdoctor-workstation`.
 
@@ -26,6 +26,7 @@ This document intentionally contains no self-assigned readiness percentage. Rele
 - Fedora Atomic/Bazzite policy that suppresses DNF host mutation and prefers mapped user-space/package-scoped managers before rpm-ostree layering.
 - Package-manager conflict and PATH ownership/version diagnostics.
 - Read-only project-aware diagnosis for bounded declarative manifests with JSON output and CI exit semantics.
+- Project-manifest reads are capped at 1,000,000 bytes/characters and discovered requirements are capped at 128.
 - Privacy-scrubbed diagnostic export with allowlisted session/shell values.
 - Privacy-safe Markdown support report intended for GitHub issues.
 - Bash, Zsh, and Fish completion generation from registered CLI commands/groups.
@@ -34,6 +35,9 @@ This document intentionally contains no self-assigned readiness percentage. Rele
 - Behavioral installer tests that do not require network access.
 - `self-update` targets `devdoctor-workstation`.
 - Ownership-verified, fail-closed uninstall planning.
+- Peak-RSS performance workflow using fresh subprocesses and child-process accounting.
+- Startup RSS regression budget of 128 MiB and bounded scan budget of 192 MiB.
+- Python-allocation regression test for a near-limit project manifest.
 - Release tag/package-version consistency check.
 - Distribution filename checks for the normalized `devdoctor_workstation` wheel and sdist.
 - One-build release pipeline: tested artifacts are reused for GitHub Release and optional PyPI publication.
@@ -41,6 +45,15 @@ This document intentionally contains no self-assigned readiness percentage. Rele
 - SPDX 2.3 SBOM generation.
 - GitHub/Sigstore provenance and SBOM attestations.
 - PyPI Trusted Publishing job gated by a repository variable and protected `pypi` environment.
+
+## Memory evidence
+
+The first Peak-RSS CI baseline on commit `5c32d792e768109465a9a5fe7e3bc3cc9d1d22da` measured:
+
+- `devdoctor --version`: max Peak RSS **27.27 MiB** across five fresh subprocesses.
+- bounded `git/python/node` inventory: max Peak RSS **124.96 MiB** across five fresh subprocesses, including observed child processes.
+
+Those measurements passed the 128 MiB startup and 192 MiB bounded-scan budgets. They are regression evidence from a GitHub-hosted Ubuntu runner, not workstation-wide memory guarantees. The final tag still requires the same memory workflow to pass on the exact release commit.
 
 ## Required qualification gates
 
@@ -58,6 +71,14 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] Console entry point resolves to `devdoctor.entrypoint:main`.
 - [ ] Project-manifest parser positive/negative fixtures pass.
 - [ ] Support-report privacy/escaping tests pass.
+
+### Performance and memory
+
+- [ ] `Performance and memory baseline` succeeds on the exact release commit.
+- [ ] Fresh-process startup Peak RSS remains at or below 128 MiB.
+- [ ] Bounded `git/python/node` inventory Peak RSS remains at or below 192 MiB, including observed children.
+- [ ] Near-limit project-manifest parsing remains below the 16 MiB Python-allocation regression threshold used by the test suite.
+- [ ] No memory threshold is raised merely to make CI pass; a regression must be investigated first.
 
 ### Clean installation
 
@@ -103,6 +124,8 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] Supported project manifests are read without executing project hooks or commands.
 - [ ] Symlinked supported manifests are refused.
 - [ ] Oversized/invalid manifests fail to warnings rather than execution or guessed requirements.
+- [ ] Project requirement accumulation is bounded.
+- [ ] Long/untrusted version strings and terminal escape sequences are bounded/sanitized before display or comparison.
 - [ ] Unsupported version expressions become `unknown`, not forced pass/fail.
 - [ ] Arbitrary `XDG_SESSION_TYPE` and shell values are not copied to diagnostic output.
 - [ ] Support Markdown neutralizes control delimiters used by its rendered fields.
@@ -114,6 +137,8 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] `devdoctor_workstation-1.2.0rc1.tar.gz` is produced.
 - [ ] Wheel and sdist are generated once by the release build job.
 - [ ] Clean-wheel validation uses the generated wheel.
+- [ ] Release wheel runs `project`, `support`, diagnostics, completion, self-update, and uninstall smoke checks.
+- [ ] Release workflow rechecks the Peak-RSS budgets before artifact publication.
 - [ ] `devdoctor-install.sh` is added to the release payload.
 - [ ] SPDX SBOM is generated successfully.
 - [ ] `SHA256SUMS` verifies successfully.
@@ -161,6 +186,7 @@ DevDoctor distinguishes:
 - **Unit/fixture verified** — deterministic policy covered by tests.
 - **Clean-wheel verified** — built package installs and starts in a new environment.
 - **Host/container integration verified** — CI exercised a real distro/container package manager.
+- **Memory regression verified** — an exact CI run stayed under explicit Peak-RSS/allocation budgets.
 - **Manual workstation verified** — behavior was tested on an actual workstation/image.
 
 Synthetic Fedora Atomic and Bazzite containers validate policy only. They are not evidence of real Bazzite workstation, desktop, hardware, reboot, or rpm-ostree deployment behavior.
@@ -171,4 +197,4 @@ Project-manifest support similarly means only the documented fields/formats are 
 
 `v1.2.0rc1` may be tagged only when the current commit's required automated gates are green.
 
-`v1.2.0` stable requires the same gates plus review of release-candidate feedback and no unresolved high-severity regression in install, update, uninstall, repair, rollback, self-update, project diagnosis, privacy reporting, or package-manager selection.
+`v1.2.0` stable requires the same gates plus review of release-candidate feedback and no unresolved high-severity regression in install, update, uninstall, repair, rollback, self-update, project diagnosis, privacy reporting, memory behavior, or package-manager selection.
