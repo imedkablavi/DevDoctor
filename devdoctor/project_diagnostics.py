@@ -606,7 +606,7 @@ def _compatible_upper_bound(required: tuple[int, ...]) -> tuple[int, ...] | None
         return None
     prefix = list(required[:-1])
     prefix[-1] += 1
-    return tuple([*prefix, 0])
+    return (*prefix, 0)
 
 
 def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
@@ -648,11 +648,7 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
             upper = (0, 0, patch + 1)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~":
-        upper = (
-            (required[0], required[1] + 1, 0)
-            if len(required) > 1
-            else (required[0] + 1, 0, 0)
-        )
+        upper = (required[0], required[1] + 1, 0) if len(required) > 1 else (required[0] + 1, 0, 0)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~=":
         upper = _compatible_upper_bound(required)
@@ -768,7 +764,9 @@ def diagnose_project(root: Path) -> ProjectReport:
             message = "installed version does not satisfy the discovered requirement"
         else:
             status = "unknown"
-            message = "installed tool was found, but the version constraint is not safely comparable"
+            message = (
+                "installed tool was found, but the version constraint is not safely comparable"
+            )
         installed_version = _safe_display_text(detection.version) if detection.version else None
         checks.append(
             ProjectCheck(
