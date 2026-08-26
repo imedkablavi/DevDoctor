@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -126,6 +127,21 @@ def test_presence_only_manifests_still_require_their_runtime(tmp_path: Path) -> 
     assert warnings == ()
 
 
+def test_discovery_never_executes_package_scripts(tmp_path: Path) -> None:
+    marker = tmp_path / "must-not-exist"
+    payload = {
+        "scripts": {"postinstall": f"touch {marker}"},
+        "engines": {"node": ">=22"},
+    }
+    (tmp_path / "package.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    requirements, _, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+
+    assert any(item.tool_id == "node" for item in requirements)
+    assert warnings == ()
+    assert not marker.exists()
+
+
 def test_discovery_refuses_symlinked_manifests(tmp_path: Path) -> None:
     root = tmp_path / "project"
     root.mkdir()
@@ -138,6 +154,29 @@ def test_discovery_refuses_symlinked_manifests(tmp_path: Path) -> None:
     assert requirements == ()
     assert sources == ()
     assert any("symlinked manifests are not followed" in warning for warning in warnings)
+
+
+def test_discovery_refuses_oversized_manifest(tmp_path: Path) -> None:
+    oversized = " " * (project_diagnostics._MAX_MANIFEST_BYTES + 1)
+    (tmp_path / "package.json").write_text(oversized, encoding="utf-8")
+
+    requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+
+    assert requirements == ()
+    assert sources == ()
+    assert any("manifest exceeds" in warning for warning in warnings)
+
+
+def test_invalid_manifests_become_warnings(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("{not-json", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project\n", encoding="utf-8")
+
+    requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+
+    assert requirements == ()
+    assert set(sources) == {"package.json", "pyproject.toml"}
+    assert "package.json: invalid JSON" in warnings
+    assert "pyproject.toml: invalid TOML" in warnings
 
 
 def test_diagnose_project_marks_version_mismatch_and_missing_tool(
