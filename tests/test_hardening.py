@@ -33,14 +33,19 @@ def _fixture_cases() -> list[dict[str, object]]:
 def test_package_manager_fixture_matrix(case: dict[str, object]) -> None:
     installed = set(case["installed"])
     manager_ids = {definition[0] for definition in package_managers.PACKAGE_MANAGERS}
-    managers = tuple(_manager(manager_id, installed=manager_id in installed) for manager_id in manager_ids)
+    managers = tuple(
+        _manager(manager_id, installed=manager_id in installed) for manager_id in manager_ids
+    )
     release = case["release"]
 
     assert package_managers.is_atomic_host(release, managers) is case["expected_atomic"]
     order = hardening.atomic_safe_manager_order(release, managers)
     assert order[0] == case["expected_primary"]
 
-    conflicts = {conflict.kind for conflict in package_managers.package_manager_conflicts(managers, release)}
+    conflicts = {
+        conflict.kind
+        for conflict in package_managers.package_manager_conflicts(managers, release)
+    }
     assert conflicts == set(case["expected_conflicts"])
 
 
@@ -58,7 +63,9 @@ def test_atomic_manager_order_never_returns_dnf() -> None:
     assert "dnf" not in order
 
 
-def test_install_plan_for_silverblue_uses_rpm_ostree_not_dnf(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_install_plan_for_silverblue_uses_rpm_ostree_not_dnf(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         package_managers,
         "read_os_release",
@@ -107,8 +114,16 @@ def test_safe_diagnostics_do_not_include_raw_home_or_environment_values(
 ) -> None:
     monkeypatch.setenv("PATH", "/home/alice/.local/bin:/usr/bin")
     monkeypatch.setenv("API_TOKEN", "super-secret-value")
-    monkeypatch.setattr(hardening, "read_os_release", lambda: {"ID": "ubuntu", "PRETTY_NAME": "Ubuntu"})
-    monkeypatch.setattr(hardening, "detect_package_managers", lambda: (_manager("apt", installed=True),))
+    monkeypatch.setattr(
+        hardening,
+        "read_os_release",
+        lambda: {"ID": "ubuntu", "PRETTY_NAME": "Ubuntu"},
+    )
+    monkeypatch.setattr(
+        hardening,
+        "detect_package_managers",
+        lambda: (_manager("apt", installed=True),),
+    )
 
     snapshot = hardening.safe_diagnostic_snapshot()
     rendered = json.dumps(snapshot)
