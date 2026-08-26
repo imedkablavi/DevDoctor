@@ -12,8 +12,8 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: "pip"
@@ -22,7 +22,7 @@ jobs:
       - name: Measure startup and bounded scan
         run: python scripts/benchmark.py --iterations 5 --output benchmark.json
       - name: Upload benchmark baseline
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: devdoctor-performance-baseline
           path: benchmark.json
