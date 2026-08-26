@@ -44,6 +44,8 @@ _ATOM_PATTERN = re.compile(
     r"(>=|<=|==|!=|~=|=|>|<|\^|~)?v?"
     r"(\d+(?:\.\d+){0,3})(?:\.(x|\*))?"
 )
+_ANSI_CSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_ANSI_OSC_RE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
 _SIMPLE_VERSION_FILES = (
     (".nvmrc", "node"),
     (".node-version", "node"),
@@ -110,10 +112,16 @@ class ProjectReport:
 
 
 def _safe_display_text(value: object, *, max_chars: int = _MAX_DISPLAY_CHARS) -> str:
-    """Remove control characters while bounding work and output memory."""
+    """Remove terminal sequences/control characters with bounded work and output."""
+
+    raw = str(value)
+    sample_limit = max(512, max_chars * 4)
+    sample = raw[:sample_limit]
+    sample = _ANSI_OSC_RE.sub("", sample)
+    sample = _ANSI_CSI_RE.sub("", sample)
 
     rendered: list[str] = []
-    for character in str(value):
+    for character in sample:
         if character in {"\n", "\r", "\t"}:
             character = " "
         elif unicodedata.category(character).startswith("C"):
