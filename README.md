@@ -18,9 +18,9 @@
 
 DevDoctor inspects the Linux workstation you already have, finds missing or broken developer tooling, explains package-manager and PATH conflicts, and builds distro-aware repair or install plans that are previewed before execution.
 
-It is not another environment manager and it does not replace your package manager. The goal is narrower: answer **what is wrong with this workstation, why is it wrong, and what is the safest verified next step?**
+It does not replace your package manager and it is not another environment manager. The goal is specific: identify what is wrong, show the local evidence, and produce the safest supported next step.
 
-Scans are read-only. Mutating commands require an explicit apply path and confirmation. When package ownership is ambiguous, DevDoctor is designed to refuse rather than guess.
+Scans are read-only. Mutating commands require an explicit apply path and confirmation. When ownership or host policy is ambiguous, DevDoctor refuses instead of guessing.
 
 ## Demo
 
@@ -30,7 +30,7 @@ Scans are read-only. Mutating commands require an explicit apply path and confir
 
 The demo is generated from real command output. See [assets/screenshots](assets/screenshots/README.md) for regeneration notes.
 
-## What it looks for
+## Example
 
 ```text
 $ devdoctor check --profile devops --missing
@@ -55,17 +55,19 @@ DevOps
 ✗ Terraform                                   sudo dnf install terraform
 ```
 
-Typical problems include a Docker CLI whose daemon is unreachable, missing runtime dependencies, broken executable symlinks, duplicate PATH installations, conflicting package managers, missing Git identity, incomplete Android/Flutter tooling, Java without `JAVA_HOME`, Python without working pip, and language tools installed but not exported into PATH.
+Typical findings include Docker daemon failures, missing runtime dependencies, broken executable symlinks, duplicate PATH installations, conflicting package managers, missing Git identity, incomplete Android/Flutter tooling, Java without `JAVA_HOME`, Python without working pip, and user-space binaries that are not exported into PATH.
 
 ## Install
 
 DevDoctor requires Python 3.11 or newer.
 
-The Python distribution name is `devdoctor-cli`; the executable command is `devdoctor`.
+The product name is **DevDoctor**. The console command is **`devdoctor`**. The Python distribution prepared for publication is **`devdoctor-workstation`**.
+
+> `devdoctor-cli` is not this project's distribution name. Do not use it to install or update this repository.
 
 ### Current repository build
 
-Until `devdoctor-cli` is published and verified on PyPI, install from the repository:
+Until the first `devdoctor-workstation` PyPI release is published and verified, install directly from this repository:
 
 ```bash
 python -m pip install "git+https://github.com/imedkablavi/DevDoctor.git"
@@ -80,9 +82,9 @@ cd DevDoctor
 python -m pip install -e ".[dev]"
 ```
 
-A PyPI Trusted Publishing workflow is prepared for tagged releases, but the README intentionally does not claim that `pip install devdoctor-cli` is publicly available until the PyPI project has actually been published and verified.
+A PyPI Trusted Publishing workflow is prepared for tagged releases. The README intentionally does not advertise `pip install devdoctor-workstation` until the public PyPI project has been created, published, and verified.
 
-The Homebrew formula is also still release-process readiness work. Do not rely on a Homebrew install command until the tap exists and its installation CI passes.
+The Homebrew formula is also release-readiness work. Do not rely on a Homebrew install command until a tap exists and its clean installation CI passes.
 
 ## Quick start
 
@@ -120,7 +122,7 @@ devdoctor install --profile frontend --apply
 | `devdoctor install [tools...]` | Preview or run distro-aware install plans. |
 | `devdoctor repair [tools...]` | Show repair evidence and recommendations. |
 | `devdoctor repair-apply [tools...]` | Preview or apply rollback-capable repair actions. |
-| `devdoctor repair-rollback` | Preview or apply a persisted rollback transaction. |
+| `devdoctor repair-rollback TRANSACTION_ID` | Preview or apply a persisted rollback transaction. |
 | `devdoctor verify [tools...]` | Exit non-zero when selected tools need attention. |
 | `devdoctor search QUERY` | Search the local tool catalog. |
 | `devdoctor manager-conflicts` | Report suspicious package-manager overlap. |
@@ -133,7 +135,7 @@ devdoctor install --profile frontend --apply
 | `devdoctor update` | Preview package-manager update commands. |
 | `devdoctor uninstall TOOL` | Remove only when installed ownership can be proven. |
 | `devdoctor cache clean` | Preview supported package cache cleanup commands. |
-| `devdoctor self-update` | Preview an update of the `devdoctor-cli` distribution. |
+| `devdoctor self-update` | Preview an update of the `devdoctor-workstation` distribution. |
 | `devdoctor health` | Run the legacy health-style report and exporters. |
 
 ## Profiles
@@ -166,19 +168,19 @@ Built-in profiles include `general`, `frontend`, `backend`, `python`, `node`, `r
 
 For each tool DevDoctor can record installed state, executable path, parsed version, package ownership where the host can prove it, inferred installation method, configuration locations, dependency state, health, repair recommendations, and an install plan when a safe mapping exists.
 
-Detection support is not the same as mutation support. See [distribution support evidence](docs/SUPPORTED_DISTROS.md) for the distinction between fixture, clean-wheel, container integration, and real-workstation evidence.
+Detection support is not the same as mutation support. See [distribution support evidence](docs/SUPPORTED_DISTROS.md) for the distinction between fixtures, clean-wheel checks, container integration, and real-workstation evidence.
 
 ## Fedora Atomic and Bazzite
 
-Image-based Fedora derivatives need different rules from mutable Fedora. DevDoctor's release-candidate policy suppresses DNF host mutation on Fedora Atomic and Bazzite even when a `dnf` executable is present.
+Image-based Fedora derivatives need different rules from mutable Fedora. DevDoctor suppresses DNF host mutation on Fedora Atomic and Bazzite even when a `dnf` executable is present.
 
-Where mappings exist, the planner prefers appropriate user-space tooling first and uses rpm-ostree layering as a host fallback. Synthetic Atomic/Bazzite container tests validate policy only; they are not presented as real workstation or hardware compatibility testing.
+Where mappings exist, the planner prefers appropriate user-space tooling first and uses rpm-ostree layering as a host fallback. Synthetic Atomic/Bazzite container tests validate policy only. They are not presented as real workstation or hardware compatibility testing.
 
 ## Repair and rollback
 
-Repair output includes the problem, evidence/reason, risk, proposed command or manual action, and a verification command when one is available.
+Ordinary `repair` is advisory. `repair-apply` only exposes repair actions that include an executable command and a known rollback command. It previews by default and requires `--apply` before execution.
 
-Ordinary `repair` remains advisory. The release-candidate transaction path adds explicit `repair-apply` and `repair-rollback` commands for repair actions where DevDoctor knows a bounded rollback command. Both preview by default and require a separate explicit apply path.
+Applied actions are recorded in a transaction journal. `repair-rollback` requires the transaction ID, validates persisted rollback commands against a bounded allowlist, previews them, and requires a separate apply decision.
 
 ## PATH and package ownership
 
@@ -193,7 +195,7 @@ devdoctor diagnostics --stdout | python -m json.tool
 devdoctor diagnostics --output devdoctor-diagnostics.json
 ```
 
-The support snapshot intentionally omits hostname, username, raw PATH values, arbitrary environment values, and secret/token values. It reports bounded system and package-manager facts useful for debugging without turning the diagnostic file into a workstation data dump.
+The support snapshot intentionally omits hostname, username, raw PATH values, arbitrary environment values, and secret/token values. Review diagnostic files before sharing them because package and version names can still reveal local environment details.
 
 ## Export formats
 
@@ -216,7 +218,7 @@ JSON is the machine-readable inventory format. Markdown is useful for issues, ha
 - `--apply` is required for supported mutation paths.
 - Confirmation remains enabled unless the user explicitly passes `--yes`.
 - Fedora Atomic/Bazzite host planning does not fall back to DNF mutation.
-- Ambiguous package ownership causes uninstall to refuse rather than select a preferred package manager by guesswork.
+- Ambiguous package ownership causes uninstall to refuse rather than select a package manager by guesswork.
 - Executed operations are recorded as structured JSON Lines in the user state directory.
 - Verification commands run after successful operations when the plan provides one.
 - Diagnostics are designed not to export secrets, credentials, shell history, hostname, username, or raw environment values.
@@ -238,7 +240,7 @@ flowchart LR
   Executor --> Verify[Verification + operation log]
 ```
 
-The bootstrap model is centered on `ToolSpec`, `ToolDetection`, `InstallPlan`, `BootstrapProfile`, and `BootstrapInventory`. The current release candidate also has a small compatibility hardening layer around legacy planners and mutating callbacks. That layer is deliberately conservative; moving those policies into one central planner/executor API remains architecture cleanup work rather than a claim that monkey-patching is the final design.
+The bootstrap model is centered on `ToolSpec`, `ToolDetection`, `InstallPlan`, `BootstrapProfile`, and `BootstrapInventory`. The current release candidate also has a conservative compatibility layer around older planners and mutating callbacks. Moving those policies into one central planner/executor API remains architecture cleanup work.
 
 ## Plugin catalog
 
@@ -258,14 +260,14 @@ The `v1.2.0rc1` release pipeline is designed to build the Python distributions o
 Expected release payload:
 
 ```text
-devdoctor_cli-1.2.0rc1-py3-none-any.whl
-devdoctor_cli-1.2.0rc1.tar.gz
+devdoctor_workstation-1.2.0rc1-py3-none-any.whl
+devdoctor_workstation-1.2.0rc1.tar.gz
 devdoctor-install.sh
 devdoctor.spdx.json
 SHA256SUMS
 ```
 
-PyPI publication remains disabled until the external Trusted Publisher and protected `pypi` environment are configured. See [release distribution readiness](docs/RELEASE_DISTRIBUTION.md) and [v1.2.0rc1 release notes](docs/RELEASE_NOTES_v1.2.0rc1.md).
+PyPI publication remains disabled until the external Trusted Publisher for `devdoctor-workstation` and the protected `pypi` environment are configured. See [release distribution readiness](docs/RELEASE_DISTRIBUTION.md) and [v1.2.0rc1 release notes](docs/RELEASE_NOTES_v1.2.0rc1.md).
 
 ## Development
 
@@ -278,12 +280,12 @@ python -m devdoctor --quiet
 python -m devdoctor --json | python -m json.tool
 ```
 
-When changing package mappings or safety policy, add deterministic positive and negative tests. When changing CLI output, verify both narrow terminal output and machine-readable JSON.
+When changing package mappings, package identity, or safety policy, add deterministic positive and negative tests. When changing CLI output, verify terminal output and machine-readable JSON.
 
 ## Roadmap
 
-- Qualify and publish the `v1.2.0` release after the release candidate passes the full matrix.
-- Configure the external PyPI Trusted Publisher and protected GitHub `pypi` environment.
+- Qualify and publish the release candidate after the final commit passes the full matrix.
+- Configure the external PyPI Trusted Publisher for `devdoctor-workstation` and protected GitHub `pypi` environment.
 - Publish and validate a Homebrew tap instead of advertising a future command prematurely.
 - Move temporary runtime policy overrides into a single central planner/executor architecture.
 - Expand real-workstation evidence for Atomic/Bazzite and other advertised environments.
