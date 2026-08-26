@@ -17,7 +17,12 @@ and this project uses semantic versioning.
 - `manager-conflicts` command for package-manager overlap and Atomic-host policy conflicts.
 - `path-conflicts` command for bounded duplicate executable, version, and package-ownership analysis.
 - Privacy-scrubbed `diagnostics` export without hostname, username, raw PATH values, arbitrary environment values, or secret/token values.
+- `support` command that renders the scrubbed diagnostic snapshot as copy/paste-ready Markdown for GitHub issues.
+- `project` command for read-only comparison of supported project manifests with the current workstation, including JSON output and CI-friendly exit codes.
+- Bounded project evidence support for Python, Node, Rust/Cargo, Go, mise/asdf-style version declarations, Devbox, Docker/Compose, Ruby, PHP, and common Java project manifests.
+- Conservative project version comparison for common numeric operators including `>=`, `<=`, `!=`, caret, tilde, PEP 440 compatible-release `~=`, wildcards, and `||` alternatives.
 - Bash, Zsh, and Fish completion generation without editing shell startup files.
+- Dynamic top-level completion discovery from the registered Typer commands and command groups.
 - Transaction-journaled repair application and rollback commands with independent confirmation and bounded rollback allowlists.
 - Startup/bounded-scan benchmark workflow.
 - Python 3.11 through 3.14 clean-wheel installation matrix.
@@ -27,16 +32,20 @@ and this project uses semantic versioning.
 - PyPI Trusted Publishing path that reuses the exact artifacts produced by the tagged release build.
 - Release-candidate notes and evidence-based distribution/readiness documentation.
 - Explicit release checks for normalized `devdoctor_workstation` wheel and sdist filenames.
+- Bug-report form fields for the privacy-safe support report and project-compatibility output.
 
 ### Changed
 
 - Release candidate version is `1.2.0rc1` and is classified as beta until qualification completes.
 - Python distribution identifier is `devdoctor-workstation`; the product and executable remain `DevDoctor` and `devdoctor`.
 - The previously planned `devdoctor-cli` distribution identifier was abandoned before first publication because it is already used by another public project.
+- Atomic-host classification is persisted once in the inventory context from release evidence instead of repeatedly probing package managers while planning each tool.
+- Atomic package planning prefers mapped user-space/package-scoped managers before rpm-ostree layering.
 - GitHub Actions workflows use current Node 24/ESM-generation official actions where available.
+- CI and clean-wheel smoke checks exercise project diagnostics, support reports, and dynamic completions.
 - Release tags are rejected when the tag version does not match the package version.
 - Release checksum generation is deterministic and excludes the checksum manifest itself.
-- README positioning now focuses on diagnosing the existing Linux workstation rather than presenting DevDoctor as another environment manager.
+- README positioning now focuses on diagnosing the existing Linux workstation and repository requirements rather than presenting DevDoctor as another environment manager.
 - Documentation distinguishes detection support, fixture verification, container integration, and real-workstation evidence.
 - PyPI and Homebrew installation instructions are not presented as available before those external channels are actually published and verified.
 
@@ -44,6 +53,12 @@ and this project uses semantic versioning.
 
 - `self-update` now upgrades `devdoctor-workstation` instead of targeting unrelated or occupied package names.
 - The user-space installer now resolves `devdoctor_workstation-<version>-py3-none-any.whl` and verifies it against the release checksum manifest.
+- The installer preflights Python `venv` support before creating DevDoctor installation directories and gives an actionable Debian/Ubuntu `python3-venv` message when needed.
+- Reinstalling the same DevDoctor version now replaces a stale/broken virtual environment with a freshly validated environment through a rollback-safe directory swap.
+- Planner patches are applied before importing the CLI so direct planner aliases do not retain an unhardened implementation.
+- Package-manager detection is no longer repeated for every missing tool during Atomic planning.
+- Mutable Fedora is not classified as Atomic merely because an `rpm-ostree` executable is installed.
+- Arbitrary `XDG_SESSION_TYPE` and shell environment values are no longer copied into the privacy diagnostic snapshot; only known normalized values are reported.
 - Project metadata tests validate the hardened public console entry point, `devdoctor.entrypoint:main`, and the publication distribution name.
 - Hardening tests were reformatted so the CI lint gate can reach the actual test suite.
 - PATH alternate probing no longer reports a duplicate installation when the primary command lookup says the executable is missing.
@@ -52,7 +67,9 @@ and this project uses semantic versioning.
 
 - `uninstall` now fails closed unless the selected executable's detected package ownership matches the catalog mapping.
 - RPM ownership on Atomic/Bazzite hosts is not treated as proof that a package is rpm-ostree layered.
-- DNF host mutation is suppressed on Fedora Atomic/Bazzite policy paths.
+- DNF host mutation is suppressed on confirmed Fedora Atomic/Bazzite policy paths.
+- Project diagnosis never executes project hooks/scripts, refuses symlinked supported manifests, bounds parsed files to 1 MB, and converts malformed manifests into warnings.
+- Support reports are derived only from privacy-scrubbed diagnostics and neutralize backtick/newline injection in displayed values.
 - Repair application and rollback remain preview-first and require explicit apply/confirmation paths.
 - Release provenance uses GitHub OIDC/keyless attestations instead of a long-lived signing credential in the repository.
 - PyPI publishing uses Trusted Publishing and does not require a long-lived PyPI API token.
