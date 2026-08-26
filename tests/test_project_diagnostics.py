@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +12,12 @@ from devdoctor import project_diagnostics
     ("installed", "constraint", "expected"),
     [
         ("Python 3.13.7", ">=3.11", True),
+        ("Python 3.13.7", ">=3.11,!=3.12.0", True),
+        ("Python 3.12.0", ">=3.11,!=3.12.0", False),
+        ("Python 3.11.9", "~=3.11", True),
+        ("Python 4.0.0", "~=3.11", False),
+        ("Python 3.11.8", "~=3.11.2", True),
+        ("Python 3.12.0", "~=3.11.2", False),
         ("v22.4.1", ">=20 <23", True),
         ("v18.19.0", ">=20 <23", False),
         ("9.12.0", "9.12.0", True),
@@ -34,29 +41,46 @@ def test_version_satisfies_common_project_constraints(
     assert project_diagnostics.version_satisfies(installed, constraint) is expected
 
 
-def test_discovery_reads_common_project_manifests(tmp_path: object) -> None:
-    root = tmp_path
-    (root / "pyproject.toml").write_text(
+def test_discovery_reads_common_project_manifests(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\nrequires-python = ">=3.12"\n',
         encoding="utf-8",
     )
-    (root / "package.json").write_text(
-        '{"engines":{"node":">=22","npm":">=10"},"packageManager":"pnpm@9.15.0"}',
+    (tmp_path / "package.json").write_text(
+        "{"
+        '"engines":{"node":">=22","npm":">=10"},'
+        '"packageManager":"pnpm@9.15.0+sha512-example"'
+        "}",
         encoding="utf-8",
     )
-    (root / "Cargo.toml").write_text(
+    (tmp_path / "Cargo.toml").write_text(
         '[package]\nname = "demo"\nrust-version = "1.82"\n',
         encoding="utf-8",
     )
-    (root / "go.mod").write_text("module example.test/demo\n\ngo 1.23\n", encoding="utf-8")
-    (root / ".tool-versions").write_text("python 3.12.6\nnodejs 22.11.0\n", encoding="utf-8")
-    (root / "mise.toml").write_text('[tools]\nterraform = "1.9"\n', encoding="utf-8")
-    (root / "devbox.json").write_text(
+    (tmp_path / "go.mod").write_text(
+        "module example.test/demo\n\ngo 1.23\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".tool-versions").write_text(
+        "python 3.12.6\nnodejs 22.11.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "mise.toml").write_text(
+        '[tools]\nterraform = "1.9"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "devbox.json").write_text(
         '{"packages":["python@3.12","nodejs@22","ripgrep@latest"]}',
         encoding="utf-8",
     )
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+    (tmp_path / "Gemfile").write_text("source 'https://rubygems.org'\n", encoding="utf-8")
+    (tmp_path / "composer.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / "pom.xml").write_text("<project/>\n", encoding="utf-8")
 
-    requirements, sources, warnings = project_diagnostics.discover_project_requirements(root)
+    requirements, sources, warnings = project_diagnostics.discover_project_requirements(
+        tmp_path
+    )
     triples = {(item.tool_id, item.source, item.constraint) for item in requirements}
 
     assert ("python", "pyproject.toml", ">=3.12") in triples
@@ -64,14 +88,45 @@ def test_discovery_reads_common_project_manifests(tmp_path: object) -> None:
     assert ("npm", "package.json", ">=10") in triples
     assert ("pnpm", "package.json", "9.15.0") in triples
     assert ("rust", "Cargo.toml", ">=1.82") in triples
+    assert ("cargo", "Cargo.toml", None) in triples
     assert ("go", "go.mod", ">=1.23") in triples
     assert ("terraform", "mise.toml", "1.9") in triples
     assert ("python", "devbox.json", "3.12") in triples
+    assert ("docker", "Dockerfile", None) in triples
+    assert ("ruby", "Gemfile", None) in triples
+    assert ("php", "composer.json", None) in triples
+    assert ("java", "pom.xml", None) in triples
     assert "devbox.json" in sources
     assert warnings == ()
 
 
-def test_discovery_refuses_symlinked_manifests(tmp_path: object) -> None:
+def test_presence_only_manifests_still_require_their_runtime(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "Cargo.toml").write_text(
+        '[package]\nname = "demo"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "go.mod").write_text(
+        "module example.test/demo\n",
+        encoding="utf-8",
+    )
+
+    requirements, _, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+    triples = {(item.tool_id, item.source, item.constraint) for item in requirements}
+
+    assert ("node", "package.json", None) in triples
+    assert ("python", "pyproject.toml", None) in triples
+    assert ("rust", "Cargo.toml", None) in triples
+    assert ("cargo", "Cargo.toml", None) in triples
+    assert ("go", "go.mod", None) in triples
+    assert warnings == ()
+
+
+def test_discovery_refuses_symlinked_manifests(tmp_path: Path) -> None:
     root = tmp_path / "project"
     root.mkdir()
     outside = tmp_path / "outside-package.json"
@@ -86,7 +141,7 @@ def test_discovery_refuses_symlinked_manifests(tmp_path: object) -> None:
 
 
 def test_diagnose_project_marks_version_mismatch_and_missing_tool(
-    tmp_path: object,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     (tmp_path / "pyproject.toml").write_text(
@@ -126,9 +181,7 @@ def test_diagnose_project_marks_version_mismatch_and_missing_tool(
     assert "MISSING" in project_diagnostics.render_project_report(report)
 
 
-def test_project_json_does_not_include_absolute_root_path(tmp_path: object) -> None:
-    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
-
+def test_project_json_does_not_include_absolute_root_path(tmp_path: Path) -> None:
     report = project_diagnostics.diagnose_project(tmp_path)
     rendered = str(report.to_dict())
 
