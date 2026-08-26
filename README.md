@@ -16,11 +16,11 @@
   <strong>Diagnose broken Linux developer workstations before changing them.</strong>
 </p>
 
-DevDoctor inspects the Linux workstation you already have, finds missing or broken developer tooling, explains package-manager and PATH conflicts, and builds distro-aware repair or install plans that are previewed before execution.
+DevDoctor inspects the Linux workstation you already have, finds missing or broken developer tooling, explains package-manager and PATH conflicts, compares project requirements with the tools actually installed, and builds distro-aware repair or install plans that are previewed before execution.
 
-It does not replace your package manager and it is not another environment manager. The goal is specific: identify what is wrong, show the local evidence, and produce the safest supported next step.
+It does not replace your package manager or environment manager. The goal is specific: identify what is wrong, show the local evidence, and produce the safest supported next step.
 
-Scans are read-only. Mutating commands require an explicit apply path and confirmation. When ownership or host policy is ambiguous, DevDoctor refuses instead of guessing.
+Scans are read-only. Project manifests are parsed without executing project hooks or scripts. Mutating commands require an explicit apply path and confirmation. When ownership or host policy is ambiguous, DevDoctor refuses instead of guessing.
 
 ## Demo
 
@@ -92,9 +92,11 @@ The Homebrew formula is also release-readiness work. Do not rely on a Homebrew i
 devdoctor
 devdoctor check --profile general
 devdoctor check git docker node
+devdoctor project .
 devdoctor search docker
 devdoctor repair docker
 devdoctor diagnostics --stdout
+devdoctor support --stdout
 devdoctor manager-conflicts
 devdoctor path-conflicts git python node
 ```
@@ -112,6 +114,50 @@ Execute only after reviewing the plan:
 devdoctor install --profile frontend --apply
 ```
 
+## Project-aware preflight
+
+A workstation can look healthy globally and still be wrong for the repository in front of you. `devdoctor project` reads supported declarative manifests and compares their requirements with the detected toolchain.
+
+```text
+$ devdoctor project .
+DevDoctor project check: example-service
+Sources: pyproject.toml, package.json
+READY    python     found=3.13.7 required=>=3.12 source=pyproject.toml
+MISMATCH node       found=20.19.0 required=>=22 source=package.json
+MISSING  pnpm       found=not found required=9.15.0 source=package.json
+```
+
+The example shows output shape only. Project diagnosis supports selected evidence from `pyproject.toml`, `package.json`, `.tool-versions`, mise files, `Cargo.toml`, `go.mod`, `devbox.json`, language version files, Docker/Compose manifests, `Gemfile`, `composer.json`, and common Java build manifests.
+
+It never evaluates project shell code or manifest-defined scripts. Symlinked supported manifests are not followed and each parsed file is bounded to 1 MB. Unsupported version expressions become `unknown` instead of being guessed.
+
+For CI or onboarding:
+
+```bash
+devdoctor project . --json
+```
+
+During gradual adoption:
+
+```bash
+devdoctor project . --json --no-fail
+```
+
+See [Project-aware diagnostics](docs/PROJECT_DIAGNOSTICS.md) for the exact evidence and comparison contract.
+
+## Better bug reports
+
+`devdoctor support` converts the privacy-scrubbed diagnostic snapshot into Markdown that can be reviewed and pasted into a GitHub issue:
+
+```bash
+devdoctor support --stdout
+devdoctor support --output devdoctor-support.md
+```
+
+The report intentionally omits hostname, username, raw PATH values, arbitrary environment values, shell history, and credentials. Session/shell values are normalized to small allowlists. Package and version names may still be sensitive, so review the report before publishing it.
+
+The repository bug-report form asks for this report when available and requests `devdoctor project . --json --no-fail` for project-specific failures.
+
 ## Commands
 
 | Command | Purpose |
@@ -119,6 +165,7 @@ devdoctor install --profile frontend --apply
 | `devdoctor` | Full workstation inventory. |
 | `devdoctor check [tools...]` | Inspect selected tools, a category, or a profile. |
 | `devdoctor doctor [tools...]` | Run a focused workstation check. |
+| `devdoctor project [PATH]` | Compare supported project requirements with the current workstation. |
 | `devdoctor install [tools...]` | Preview or run distro-aware install plans. |
 | `devdoctor repair [tools...]` | Show repair evidence and recommendations. |
 | `devdoctor repair-apply [tools...]` | Preview or apply rollback-capable repair actions. |
@@ -127,7 +174,8 @@ devdoctor install --profile frontend --apply
 | `devdoctor search QUERY` | Search the local tool catalog. |
 | `devdoctor manager-conflicts` | Report suspicious package-manager overlap. |
 | `devdoctor path-conflicts [executables...]` | Report duplicate/version/ownership PATH conflicts. |
-| `devdoctor diagnostics` | Export a privacy-scrubbed support snapshot. |
+| `devdoctor diagnostics` | Export a privacy-scrubbed JSON support snapshot. |
+| `devdoctor support` | Create a privacy-safe Markdown issue report. |
 | `devdoctor completion SHELL` | Generate Bash, Zsh, or Fish completion text. |
 | `devdoctor benchmark` | Measure a bounded local scan. |
 | `devdoctor export json` | Export inventory JSON. |
@@ -165,6 +213,7 @@ Built-in profiles include `general`, `frontend`, `backend`, `python`, `node`, `r
 | Security and debugging | OpenSSH, GnuPG, UFW, Nmap, GDB, strace, radare2. |
 | Terminal and build tools | curl, wget, jq, ripgrep, fd, fzf, Starship, GCC, Clang, Make, CMake, Ninja. |
 | Mobile, AI, and games | Android Debug Bridge, Flutter, Ollama, CUDA compiler, Godot. |
+| Project evidence | Python/Node/Rust/Go version declarations, mise/asdf-style files, Devbox, Docker/Compose, Ruby/PHP/Java project manifests. |
 
 For each tool DevDoctor can record installed state, executable path, parsed version, package ownership where the host can prove it, inferred installation method, configuration locations, dependency state, health, repair recommendations, and an install plan when a safe mapping exists.
 
@@ -172,9 +221,11 @@ Detection support is not the same as mutation support. See [distribution support
 
 ## Fedora Atomic and Bazzite
 
-Image-based Fedora derivatives need different rules from mutable Fedora. DevDoctor suppresses DNF host mutation on Fedora Atomic and Bazzite even when a `dnf` executable is present.
+Image-based Fedora derivatives need different rules from mutable Fedora. DevDoctor records an Atomic-host classification once in the inventory context from release evidence such as Bazzite identity, known Atomic variants, image identity, or OSTree version data.
 
-Where mappings exist, the planner prefers appropriate user-space tooling first and uses rpm-ostree layering as a host fallback. Synthetic Atomic/Bazzite container tests validate policy only. They are not presented as real workstation or hardware compatibility testing.
+The planner suppresses DNF host mutation on confirmed Fedora Atomic/Bazzite systems even when a `dnf` executable is present. Merely having an `rpm-ostree` executable on an otherwise mutable Fedora workstation is not sufficient to classify the host as Atomic.
+
+Where mappings exist, the planner prefers appropriate user-space/package-scoped tooling first and uses rpm-ostree layering only as a host fallback. Synthetic Atomic/Bazzite container tests validate policy only. They are not presented as real workstation or hardware compatibility testing.
 
 ## Repair and rollback
 
@@ -193,9 +244,10 @@ The PATH analyzer reports empty entries, duplicates, missing directories, non-se
 ```bash
 devdoctor diagnostics --stdout | python -m json.tool
 devdoctor diagnostics --output devdoctor-diagnostics.json
+devdoctor support --stdout
 ```
 
-The support snapshot intentionally omits hostname, username, raw PATH values, arbitrary environment values, and secret/token values. Review diagnostic files before sharing them because package and version names can still reveal local environment details.
+The support snapshot intentionally omits hostname, username, raw PATH values, arbitrary environment values, and secret/token values. Session type and shell name are normalized instead of copying arbitrary environment strings. Review diagnostic files before sharing them because package and version names can still reveal local environment details.
 
 ## Export formats
 
@@ -212,12 +264,15 @@ JSON is the machine-readable inventory format. Markdown is useful for issues, ha
 
 ## Safety model
 
-- Scans, search, diagnostics, conflict analysis, and ordinary repair inspection are read-only.
+- Scans, search, diagnostics, support-report generation, conflict analysis, project diagnosis, and ordinary repair inspection are read-only.
+- Project diagnosis does not execute hooks, package scripts, shell fragments, or version-manager activation commands.
+- Symlinked supported project manifests are not followed and parsed manifests are size-bounded.
 - DevDoctor does not use `shell=True` for its planned command execution path.
 - Install, update, uninstall, cache cleanup, self-update, repair application, and rollback are preview-first.
 - `--apply` is required for supported mutation paths.
 - Confirmation remains enabled unless the user explicitly passes `--yes`.
-- Fedora Atomic/Bazzite host planning does not fall back to DNF mutation.
+- Confirmed Fedora Atomic/Bazzite host planning does not fall back to DNF mutation.
+- Atomic planning prefers mapped user-space/package-scoped managers before rpm-ostree layering.
 - Ambiguous package ownership causes uninstall to refuse rather than select a package manager by guesswork.
 - Executed operations are recorded as structured JSON Lines in the user state directory.
 - Verification commands run after successful operations when the plan provides one.
@@ -232,9 +287,12 @@ flowchart LR
   Catalog --> Plugins[devdoctor.bootstrap_tools entry points]
   CLI --> Detector[Isolated Detectors]
   Detector --> Inventory[BootstrapInventory]
+  Manifests[Project manifests] --> Project[Project compatibility]
+  Inventory --> Project
   Inventory --> Terminal[Rich Terminal Output]
   Inventory --> Exporters[JSON / Markdown / HTML]
   Inventory --> Policy[Package-manager safety policy]
+  Diagnostics[Scrubbed diagnostics] --> Support[Issue-ready Markdown]
   Policy --> Planner[Install / Update / Repair Plans]
   Planner --> Executor[Confirmed subprocess execution]
   Executor --> Verify[Verification + operation log]
@@ -280,7 +338,7 @@ python -m devdoctor --quiet
 python -m devdoctor --json | python -m json.tool
 ```
 
-When changing package mappings, package identity, or safety policy, add deterministic positive and negative tests. When changing CLI output, verify terminal output and machine-readable JSON.
+When changing package mappings, package identity, manifest parsing, or safety policy, add deterministic positive and negative tests. When changing CLI output, verify terminal output and machine-readable JSON.
 
 ## Roadmap
 
@@ -289,20 +347,23 @@ When changing package mappings, package identity, or safety policy, add determin
 - Publish and validate a Homebrew tap instead of advertising a future command prematurely.
 - Move temporary runtime policy overrides into a single central planner/executor architecture.
 - Expand real-workstation evidence for Atomic/Bazzite and other advertised environments.
-- Add project-aware diagnosis for `pyproject.toml`, `package.json`, `go.mod`, `Cargo.toml`, containers, and version-manager files.
+- Expand project-aware parsing only through bounded formats and regression fixtures; do not execute project configuration.
 - Add more verified distro package mappings through contribution fixtures.
-- Publish an external plugin example and stable bootstrap JSON schema documentation.
+- Publish an external plugin example and stable bootstrap/project JSON schema documentation.
 
 ## FAQ
 
 **Does DevDoctor install packages by default?**  
 No. Inventory and planning are read-only. A supported mutation requires an explicit apply path.
 
+**Does `devdoctor project` replace mise, Devbox, Nix, containers, or another environment manager?**  
+No. Those tools can remain the project's source of truth. DevDoctor only diagnoses whether the current workstation matches the declarative requirements it can safely understand.
+
 **Why not show one workstation score?**  
-A workstation is only ready relative to the project in front of it. DevDoctor reports concrete installed, missing, warning, and broken states instead of hiding them behind one score.
+A workstation is only ready relative to the project in front of it. DevDoctor reports concrete installed, missing, warning, broken, and project-mismatch states instead of hiding them behind one score.
 
 **Can I use it in CI or onboarding scripts?**  
-Yes. `devdoctor verify --profile general --quiet` gives an exit status; `devdoctor --json` gives structured inventory data.
+Yes. `devdoctor verify --profile general --quiet` checks a profile; `devdoctor project . --json` checks supported repository requirements; `devdoctor --json` gives structured inventory data.
 
 **Does it support non-Linux systems?**  
 No. DevDoctor is intentionally Linux-first.
@@ -310,6 +371,7 @@ No. DevDoctor is intentionally Linux-first.
 ## Documentation
 
 - [CLI reference](docs/CLI_REFERENCE.md)
+- [Project-aware diagnostics](docs/PROJECT_DIAGNOSTICS.md)
 - [Usage](docs/USAGE.md)
 - [Checks and catalog reference](docs/CHECKS.md)
 - [Distribution support evidence](docs/SUPPORTED_DISTROS.md)
@@ -327,7 +389,7 @@ No. DevDoctor is intentionally Linux-first.
 
 ## Contributing
 
-Contributions are welcome when they keep DevDoctor local-first, Linux-focused, testable, and honest about unavailable evidence. Start with [CONTRIBUTING.md](CONTRIBUTING.md), run the validation commands, and include terminal output or fixtures for user-facing package-manager changes.
+Contributions are welcome when they keep DevDoctor local-first, Linux-focused, testable, and honest about unavailable evidence. Start with [CONTRIBUTING.md](CONTRIBUTING.md), run the validation commands, and include fixtures for package-manager or project-manifest changes.
 
 ## Credits
 
