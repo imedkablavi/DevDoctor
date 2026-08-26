@@ -22,6 +22,9 @@ if [ "${1:-}" = "-c" ]; then
 fi
 
 if [ "${1:-}" = "-m" ] && [ "${2:-}" = "venv" ]; then
+  if [ "${DEVDOCTOR_FAKE_VENV_FAIL:-0}" = "1" ]; then
+    exit 1
+  fi
   target="$3"
   mkdir -p "$target/bin"
   cat > "$target/bin/python" <<'PYTHON'
@@ -32,7 +35,8 @@ BIN_DIR="$(dirname "$0")"
 if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ]; then
   cat > "$BIN_DIR/devdoctor" <<'DEVDOCTOR'
 #!/bin/sh
-case "$0" in
+RESOLVED="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
+case "$RESOLVED" in
   *".installing-"*)
     echo "DevDoctor 1.2.0rc1"
     exit 0
@@ -99,6 +103,20 @@ def _run_installer(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
         text=True,
         env=env,
     )
+
+
+def test_installer_venv_preflight_fails_before_devdoctor_state_is_created(
+    tmp_path: Path,
+) -> None:
+    env, data_home, bin_home = _installer_env(tmp_path)
+    env["DEVDOCTOR_FAKE_VENV_FAIL"] = "1"
+
+    result = _run_installer(env)
+
+    assert result.returncode != 0
+    assert "python3-venv" in result.stderr
+    assert not (data_home / "devdoctor").exists()
+    assert not (bin_home / "devdoctor").exists()
 
 
 def test_installer_activates_fresh_validated_environment(tmp_path: Path) -> None:
