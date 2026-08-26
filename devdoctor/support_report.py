@@ -16,7 +16,8 @@ _REGISTERED_APP_IDS: set[int] = set()
 def _display(value: Any) -> str:
     if value is None or value == "":
         return "unknown"
-    return str(value).replace("`", "'").replace("\n", " ").replace("\r", " ")
+    rendered = str(value).replace("`", "'").replace("\n", " ").replace("\r", " ")
+    return rendered.replace("|", r"\|")
 
 
 def render_support_markdown(snapshot: Mapping[str, Any]) -> str:
