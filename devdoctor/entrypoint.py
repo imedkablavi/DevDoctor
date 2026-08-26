@@ -20,11 +20,13 @@ def main() -> None:
     from devdoctor.project_diagnostics import register_project_diagnostics_command
     from devdoctor.release_safety import apply_release_safety
     from devdoctor.repair_transactions import register_repair_transaction_commands
+    from devdoctor.support_report import register_support_report_command
 
     apply_runtime_hardening()
     register_hardening_commands(app)
     register_path_conflict_command(app)
     register_repair_transaction_commands(app)
     register_project_diagnostics_command(app)
+    register_support_report_command(app)
     apply_release_safety(app)
     app()
