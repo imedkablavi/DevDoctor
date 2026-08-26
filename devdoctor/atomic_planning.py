@@ -6,8 +6,7 @@ from collections.abc import Callable, Mapping
 
 from devdoctor import bootstrap
 from devdoctor.models import JsonValue
-from devdoctor.package_managers import detect_package_managers, is_atomic_host
-from devdoctor.utils import read_os_release
+from devdoctor.package_managers import ATOMIC_VARIANTS, NIX_PACKAGES
 
 OriginalPlanner = Callable[..., bootstrap.InstallPlan | None]
 _PATCHED = False
@@ -23,10 +22,55 @@ def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
 
 
 def _system_is_atomic(system: Mapping[str, JsonValue]) -> bool:
+    """Use the already-collected host context instead of probing managers again."""
+
     distro_id = str(system.get("distribution_id", "")).lower()
     if distro_id == "bazzite":
         return True
-    return is_atomic_host(read_os_release(), detect_package_managers())
+
+    installed = _installed_manager_ids(system)
+    if "rpm-ostree" not in installed:
+        return False
+
+    distribution = str(system.get("distribution", "")).lower()
+    if any(marker in distribution for marker in (*ATOMIC_VARIANTS, "atomic", "ostree")):
+        return True
+
+    # Universal Blue derivatives are image based when rpm-ostree is the host manager.
+    return distro_id in {"ublue", "universal-blue"}
+
+
+def _plan_for_manager(
+    spec: bootstrap.ToolSpec,
+    *,
+    manager: str,
+    package: str,
+    reason: str,
+) -> bootstrap.InstallPlan | None:
+    command, dry_run, rollback = bootstrap._manager_commands(manager, package)
+    if command is None:
+        return None
+    return bootstrap.InstallPlan(
+        tool_id=spec.id,
+        tool_title=spec.title,
+        manager=manager,
+        manager_reason=reason,
+        package_name=package,
+        command=command,
+        dry_run_command=dry_run,
+        verify_command=bootstrap._verification_command(spec),
+        rollback_command=rollback,
+        explanation=f"Install {spec.title} using {manager} package `{package}`.",
+        risk=bootstrap._install_risk(manager),
+        requires_sudo=bootstrap._requires_sudo(command),
+        dependencies=tuple(dependency.tool_id for dependency in spec.tool_dependencies),
+    )
+
+
+def _mapped_user_space_package(spec: bootstrap.ToolSpec, manager: str) -> str | None:
+    if manager == "nix":
+        return spec.packages.get("nix") or NIX_PACKAGES.get(f"tool.{spec.id}")
+    return spec.packages.get(manager)
 
 
 def atomic_install_plan_for_spec(
@@ -35,88 +79,49 @@ def atomic_install_plan_for_spec(
     system: Mapping[str, JsonValue],
     original: OriginalPlanner,
 ) -> bootstrap.InstallPlan | None:
-    """Build a user-space-first Atomic plan, reusing Fedora package names for layering."""
+    """Build a user-space-first Atomic plan, layering only as a final fallback."""
 
     if not _system_is_atomic(system):
         return original(spec, system=system)
 
     installed = _installed_manager_ids(system)
 
-    if "brew" in installed and "brew" in spec.packages:
-        package = spec.packages["brew"]
-        command, dry_run, rollback = bootstrap._manager_commands("brew", package)
-        if command is not None:
-            return bootstrap.InstallPlan(
-                tool_id=spec.id,
-                tool_title=spec.title,
-                manager="brew",
-                manager_reason=(
-                    "Atomic/image-based host: prefer a user-space Homebrew install before "
-                    "layering the base image."
-                ),
-                package_name=package,
-                command=command,
-                dry_run_command=dry_run,
-                verify_command=bootstrap._verification_command(spec),
-                rollback_command=rollback,
-                explanation=(
-                    f"Install {spec.title} in user space with Homebrew package `{package}`."
-                ),
-                risk=bootstrap._install_risk("brew"),
-                requires_sudo=bootstrap._requires_sudo(command),
-                dependencies=tuple(dependency.tool_id for dependency in spec.tool_dependencies),
-            )
+    # Prefer mapped user-space/package-scoped managers before touching the base image.
+    for manager in ("brew", "flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip"):
+        if manager not in installed:
+            continue
+        package = _mapped_user_space_package(spec, manager)
+        if package is None:
+            continue
+        plan = _plan_for_manager(
+            spec,
+            manager=manager,
+            package=package,
+            reason=(
+                "Atomic/image-based host: prefer a mapped user-space or package-scoped manager "
+                "before layering the base image."
+            ),
+        )
+        if plan is not None:
+            return plan
 
     if "rpm-ostree" in installed:
         package = spec.packages.get("rpm-ostree") or spec.packages.get("dnf")
         if package:
-            command, dry_run, rollback = bootstrap._manager_commands("rpm-ostree", package)
-            if command is not None:
-                return bootstrap.InstallPlan(
-                    tool_id=spec.id,
-                    tool_title=spec.title,
-                    manager="rpm-ostree",
-                    manager_reason=(
-                        "Atomic/image-based host: use rpm-ostree layering for the Fedora package "
-                        "mapping; DNF host mutation is intentionally suppressed."
-                    ),
-                    package_name=package,
-                    command=command,
-                    dry_run_command=dry_run,
-                    verify_command=bootstrap._verification_command(spec),
-                    rollback_command=rollback,
-                    explanation=(
-                        f"Layer Fedora package `{package}` for {spec.title} with rpm-ostree. "
-                        "A reboot may be required."
-                    ),
-                    risk=bootstrap._install_risk("rpm-ostree"),
-                    requires_sudo=bootstrap._requires_sudo(command),
-                    dependencies=tuple(dependency.tool_id for dependency in spec.tool_dependencies),
-                )
+            plan = _plan_for_manager(
+                spec,
+                manager="rpm-ostree",
+                package=package,
+                reason=(
+                    "Atomic/image-based host: no mapped user-space option is available, so use "
+                    "rpm-ostree layering for the Fedora package mapping; DNF host mutation is "
+                    "intentionally suppressed."
+                ),
+            )
+            if plan is not None:
+                return plan
 
-    # Desktop/user-space mappings can remain useful, but never fall through to DNF.
-    for manager in ("flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip"):
-        if manager not in installed or manager not in spec.packages:
-            continue
-        package = spec.packages[manager]
-        command, dry_run, rollback = bootstrap._manager_commands(manager, package)
-        if command is None:
-            continue
-        return bootstrap.InstallPlan(
-            tool_id=spec.id,
-            tool_title=spec.title,
-            manager=manager,
-            manager_reason="Atomic/image-based host: selected a mapped non-DNF package manager.",
-            package_name=package,
-            command=command,
-            dry_run_command=dry_run,
-            verify_command=bootstrap._verification_command(spec),
-            rollback_command=rollback,
-            explanation=f"Install {spec.title} using {manager} package `{package}`.",
-            risk=bootstrap._install_risk(manager),
-            requires_sudo=bootstrap._requires_sudo(command),
-            dependencies=tuple(dependency.tool_id for dependency in spec.tool_dependencies),
-        )
+    # Never delegate to the mutable-host planner on an Atomic host.
     return None
 
 
