@@ -43,8 +43,7 @@ def test_package_manager_fixture_matrix(case: dict[str, object]) -> None:
     assert order[0] == case["expected_primary"]
 
     conflicts = {
-        conflict.kind
-        for conflict in package_managers.package_manager_conflicts(managers, release)
+        conflict.kind for conflict in package_managers.package_manager_conflicts(managers, release)
     }
     assert conflicts == set(case["expected_conflicts"])
 
