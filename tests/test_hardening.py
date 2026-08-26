@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import typer
 
 from devdoctor import hardening, package_managers
 
@@ -62,6 +63,37 @@ def test_atomic_manager_order_never_returns_dnf() -> None:
     assert "dnf" not in order
 
 
+def test_atomic_manager_order_prefers_user_space_before_layering() -> None:
+    managers = (
+        _manager("rpm-ostree", installed=True),
+        _manager("flatpak", installed=True),
+        _manager("nix", installed=True),
+        _manager("npm", installed=True),
+    )
+    release = {"ID": "fedora", "VARIANT_ID": "silverblue", "OSTREE_VERSION": "43.1"}
+
+    order = hardening.atomic_safe_manager_order(release, managers)
+
+    assert order.index("flatpak") < order.index("rpm-ostree")
+    assert order.index("nix") < order.index("rpm-ostree")
+    assert order.index("npm") < order.index("rpm-ostree")
+
+
+def test_atomic_system_context_uses_inventory_without_reprobing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        hardening,
+        "detect_package_managers",
+        lambda: (_ for _ in ()).throw(AssertionError("package managers must not be re-probed")),
+    )
+
+    assert hardening._system_context_is_atomic(
+        {
+            "distribution_id": "fedora",
+            "package_managers": [{"id": "rpm-ostree", "installed": True}],
+        }
+    )
+
+
 def test_install_plan_for_silverblue_uses_rpm_ostree_not_dnf(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -108,11 +140,29 @@ def test_completion_scripts_cover_all_supported_shells() -> None:
     assert "complete -c devdoctor" in hardening.completion_script("fish", commands, tools)
 
 
+def test_completion_command_names_follow_registered_typer_commands_and_groups() -> None:
+    app = typer.Typer()
+    cache = typer.Typer()
+    app.add_typer(cache, name="cache")
+
+    @app.command("check")
+    def check() -> None:
+        pass
+
+    @app.command()
+    def path_conflicts() -> None:
+        pass
+
+    assert hardening.top_level_command_names(app) == ("cache", "check", "path-conflicts")
+
+
 def test_safe_diagnostics_do_not_include_raw_home_or_environment_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PATH", "/home/alice/.local/bin:/usr/bin")
     monkeypatch.setenv("API_TOKEN", "super-secret-value")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "alice-private-session")
+    monkeypatch.setenv("SHELL", "/opt/alice/bin/private-shell")
     monkeypatch.setattr(
         hardening,
         "read_os_release",
@@ -129,5 +179,29 @@ def test_safe_diagnostics_do_not_include_raw_home_or_environment_values(
 
     assert "/home/alice/.local/bin" not in rendered
     assert "super-secret-value" not in rendered
+    assert "alice-private-session" not in rendered
+    assert "private-shell" not in rendered
+    assert snapshot["platform"]["session_type"] == "unknown"
+    assert snapshot["platform"]["shell"] == "unknown"
     assert snapshot["privacy"]["raw_path_included"] is False
     assert snapshot["privacy"]["environment_values_included"] is False
+
+
+def test_safe_diagnostics_keep_known_session_and_shell_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("SHELL", "/usr/bin/fish")
+    monkeypatch.setattr(
+        hardening,
+        "read_os_release",
+        lambda: {"ID": "fedora", "PRETTY_NAME": "Fedora Linux"},
+    )
+    monkeypatch.setattr(
+        hardening,
+        "detect_package_managers",
+        lambda: (_manager("dnf", installed=True),),
+    )
+
+    snapshot = hardening.safe_diagnostic_snapshot()
+
+    assert snapshot["platform"]["session_type"] == "wayland"
+    assert snapshot["platform"]["shell"] == "fish"
