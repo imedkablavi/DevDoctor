@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from devdoctor import path_analysis
 from devdoctor.path_analysis import analyze_path, executable_paths
 
 
@@ -46,3 +49,20 @@ def test_executable_paths_reports_broken_symlink(tmp_path: Path) -> None:
     link.symlink_to(tmp_path / "missing-target")
 
     assert executable_paths("stale-tool", (str(bin_dir),)) == (str(link),)
+
+
+def test_default_executable_paths_respects_primary_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    executable = bin_dir / "tool"
+    executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    executable.chmod(0o755)
+
+    monkeypatch.setenv("PATH", str(bin_dir))
+    monkeypatch.setattr(path_analysis.shutil, "which", lambda _name: None)
+
+    assert executable_paths("tool") == ()
+    assert executable_paths("tool", (str(bin_dir),)) == (str(executable),)
