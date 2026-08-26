@@ -44,10 +44,10 @@ def test_support_markdown_renders_scrubbed_diagnostic_fields() -> None:
     assert "/home/" not in rendered
 
 
-def test_support_markdown_neutralizes_markdown_code_delimiters_and_newlines() -> None:
+def test_support_markdown_neutralizes_markdown_control_delimiters() -> None:
     snapshot = {
         "platform": {
-            "distribution": "Bad`value\nsecond-line",
+            "distribution": "Bad`value|column\nsecond-line",
             "distribution_id": "test",
         },
         "package_managers": [],
@@ -57,5 +57,6 @@ def test_support_markdown_neutralizes_markdown_code_delimiters_and_newlines() ->
 
     rendered = render_support_markdown(snapshot)
 
-    assert "Bad'value second-line" in rendered
+    assert "Bad'value\\|column second-line" in rendered
     assert "Bad`value" not in rendered
+    assert "value|column" not in rendered
