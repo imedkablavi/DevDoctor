@@ -10,10 +10,7 @@ def _git_spec() -> bootstrap.ToolSpec:
 def _system(*manager_ids: str) -> dict[str, object]:
     return {
         "distribution_id": "bazzite",
-        "package_managers": [
-            {"id": manager_id, "installed": True}
-            for manager_id in manager_ids
-        ],
+        "package_managers": [{"id": manager_id, "installed": True} for manager_id in manager_ids],
     }
 
 
