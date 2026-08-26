@@ -1,154 +1,135 @@
-# Release Readiness Report
+# Release Readiness
 
-Date: 2026-06-28  
-Version reviewed: 1.1.0  
-Repository: `imedkablavi/DevDoctor`
-Python distribution: `devdoctor-cli`
-Executable command: `devdoctor`
+Date: 2026-08-27  
+Candidate: `1.2.0rc1`  
+Repository: `imedkablavi/DevDoctor`  
+Python distribution: `devdoctor-cli`  
+Executable: `devdoctor`
 
-## Summary
+## Current decision
 
-DevDoctor is prepared for its first public production release as a Linux CLI for developer workstation inventory, bootstrap planning, and repair guidance.
+**Do not tag `v1.2.0rc1` yet.**
 
-The project branding remains `DevDoctor`. The Python distribution name is `devdoctor-cli` to avoid ambiguity with older PyPI packages. The import package remains `devdoctor`, and the installed command remains `devdoctor`.
+The release-candidate code and release pipeline are prepared, but the final PR head must run through the complete GitHub Actions matrix before a tag is created. A passing workflow from an older commit is useful historical evidence, but it is not accepted as qualification for the current release commit.
 
-## Reviewed
+This document intentionally contains no self-assigned percentage or readiness score. Release status is determined by reproducible checks and external publication state.
 
-- Repository structure and naming consistency.
-- README, changelog, roadmap, support, security, contribution, migration, and release documentation.
-- CLI reference, examples, accessibility notes, brand notes, release notes, and screenshot assets.
-- GitHub issue templates, pull request template, labels, repository metadata, Dependabot, CI, package-quality workflow, and release workflow.
-- Package metadata, entry point, Python compatibility, dependencies, wheel contents, source distribution, and editable install flow.
-- CLI help pages, command examples, JSON/Markdown/HTML exports, install previews, search, repair, verify, and legacy health command.
-- Security-sensitive subprocess handling, command execution flow, operation logging, and report writes.
+## Implemented in the candidate
 
-## Improved
+- Python 3.11 through 3.14 CI matrix.
+- Clean-wheel installation matrix.
+- APT, DNF, rpm-ostree, Pacman, Zypper, Nix, Flatpak, and mixed-manager policy fixtures.
+- Distro/container integration workflow for selected package managers.
+- Fedora Atomic/Bazzite policy that suppresses DNF host mutation.
+- Package-manager conflict and PATH ownership/version diagnostics.
+- Privacy-scrubbed diagnostic export.
+- Bash, Zsh, and Fish completion generation.
+- Transaction-journaled repair application and rollback paths.
+- Correct `devdoctor-cli` self-update target.
+- Ownership-verified, fail-closed uninstall planning.
+- Release tag/package-version consistency check.
+- One-build release pipeline: tested artifacts are reused for GitHub Release and optional PyPI publication.
+- SHA-256 release manifest.
+- SPDX 2.3 SBOM generation.
+- GitHub/Sigstore provenance and SBOM attestations.
+- PyPI Trusted Publishing job gated by a repository variable and protected `pypi` environment.
 
-- Changed the Python distribution name from `devdoctor` to `devdoctor-cli`.
-- Preserved the executable command as `devdoctor`.
-- Updated installation instructions to use `pip install devdoctor-cli`.
-- Updated release templates, release process, release notes, migration guide, and package metadata for the new distribution name.
-- Documented future Homebrew tap command: `brew install imedkablavi/tap/devdoctor`.
-- Added metadata tests that enforce the `devdoctor-cli` distribution name and `devdoctor` console script.
-- Added release workflow validation that installs the built wheel by distribution name and runs `devdoctor --version`.
-- Kept screenshots and GIF assets generated from real command output.
+## Required qualification gates
 
-## Validation Checklist
+The exact commit that will be tagged must satisfy all of these gates.
 
-Required release validation:
+### Source and package quality
 
-```bash
-python -m ruff format --check .
-python -m ruff check .
-python -m pytest
-python -m build
-python -m twine check dist/*
-python -m devdoctor --version
-python -m devdoctor --quiet
-python -m devdoctor --no-color --quiet
-python -m devdoctor --json | python -m json.tool
-python -m devdoctor --json-file /tmp/devdoctor-release-validation/inventory-file.json --markdown-file /tmp/devdoctor-release-validation/inventory.md --html-file /tmp/devdoctor-release-validation/inventory.html --quiet
-python -m devdoctor search docker --no-color
-python -m devdoctor repair docker --no-color
-python -m devdoctor install git docker --no-color
-python -m devdoctor --help
-python -m devdoctor install --help
-python -m devdoctor export --help
-```
+- [ ] `ruff format --check .`
+- [ ] `ruff check .`
+- [ ] Full `pytest` suite.
+- [ ] Package build with `python -m build`.
+- [ ] `twine check dist/*`.
+- [ ] Project version equals package `__version__`.
+- [ ] Console entry point resolves to `devdoctor.entrypoint:main`.
 
-Verification exit-code behavior was checked separately:
+### Clean installation
 
-```bash
-python -m devdoctor verify git --quiet
-```
+- [ ] Wheel installs in a fresh Python 3.11 environment.
+- [ ] Wheel installs in a fresh Python 3.12 environment.
+- [ ] Wheel installs in a fresh Python 3.13 environment.
+- [ ] Wheel installs in a fresh Python 3.14 environment.
+- [ ] Installed `devdoctor --version` works.
+- [ ] Installed completion generation works.
+- [ ] Installed privacy diagnostics produce valid JSON.
+- [ ] Installed `self-update` preview targets `devdoctor-cli`.
 
-On the validation workstation this returned exit code `1` because the selected dependency set had warnings, which is the expected behavior for `verify`.
+### Package-manager safety
 
-Fresh wheel install validation:
+- [ ] Fixture matrix passes.
+- [ ] Ubuntu/APT integration passes.
+- [ ] Fedora/DNF integration passes.
+- [ ] Arch/Pacman integration passes.
+- [ ] openSUSE/Zypper integration passes.
+- [ ] Nix and Flatpak detection integration passes.
+- [ ] Synthetic Fedora Atomic policy test passes without DNF host planning.
+- [ ] Synthetic Bazzite policy test passes without DNF host planning.
+- [ ] Ambiguous uninstall ownership fails closed.
+- [ ] Atomic RPM ownership is not treated as proof of rpm-ostree layering.
+- [ ] Repair rollback allowlist/invariant tests pass.
 
-```bash
-python -m venv /tmp/devdoctor-release-check
-/tmp/devdoctor-release-check/bin/python -m pip install --find-links dist devdoctor-cli
-/tmp/devdoctor-release-check/bin/devdoctor --version
-/tmp/devdoctor-release-check/bin/devdoctor --quiet
-```
+### Release artifacts
 
-Public PyPI validation after publishing:
+- [ ] Tag version matches package version.
+- [ ] Wheel and sdist are generated once by the release build job.
+- [ ] Clean-wheel validation uses the generated wheel.
+- [ ] `devdoctor-install.sh` is added to the release payload.
+- [ ] SPDX SBOM is generated successfully.
+- [ ] `SHA256SUMS` verifies successfully.
+- [ ] Provenance attestation succeeds.
+- [ ] SBOM attestation succeeds.
+- [ ] GitHub prerelease contains the expected payload.
 
-```bash
-python -m venv /tmp/devdoctor-pypi-check
-/tmp/devdoctor-pypi-check/bin/python -m pip install devdoctor-cli
-/tmp/devdoctor-pypi-check/bin/devdoctor --version
-/tmp/devdoctor-pypi-check/bin/devdoctor --quiet
-```
+## External setup gates
 
-Before first publication, `python -m pip index versions devdoctor-cli` is expected to report no matching distribution.
+These cannot be proven by repository code alone.
 
-## Expected Artifacts
+### PyPI
 
-After `python -m build`, artifacts should use normalized distribution naming:
+Before setting `PYPI_TRUSTED_PUBLISHING_ENABLED=true`:
 
-- `dist/devdoctor_cli-1.1.0.tar.gz`
-- `dist/devdoctor_cli-1.1.0-py3-none-any.whl`
+- [ ] Create or confirm the `devdoctor-cli` project/pending publisher on PyPI.
+- [ ] Configure the trusted publisher for `imedkablavi/DevDoctor` and `.github/workflows/release.yml`.
+- [ ] Configure the GitHub environment named `pypi`.
+- [ ] Add the desired environment reviewer/protection policy.
+- [ ] Confirm the tagged release workflow has `id-token: write` only where required.
 
-The wheel must include:
+The repository does not use a long-lived PyPI API token for this path.
 
-- `devdoctor/py.typed`
-- `devdoctor/cli.py`
-- `devdoctor/bootstrap.py`
-- console script metadata for `devdoctor`
+### Stable-release repository protection
 
-## Security Review
+Before promoting the candidate to stable:
 
-DevDoctor keeps the expected security posture for a workstation bootstrap CLI:
+- [ ] Protect `main` with required CI/code-quality checks or an equivalent repository ruleset.
+- [ ] Prevent direct merges that bypass release-critical checks.
+- [ ] Prefer automatic deletion of merged feature branches.
 
-- Inventory, search, export, and repair commands are read-only.
-- Mutating operations require `--apply`.
-- Confirmation remains enabled unless `--yes` is provided.
-- Command execution uses argument vectors with `shell=False`.
-- Captured subprocess calls use bounded timeouts where appropriate.
-- Operation logs are structured JSON Lines with bounded verification output.
-- Repair suggestions do not edit shell startup files, start services, change groups, remove packages, or mutate package metadata.
+### Homebrew
 
-No command-injection regression was found in this release-prep pass.
+Homebrew is not a blocker for the release candidate. It must not be advertised as supported until:
 
-## Remaining Limitations
+- [ ] A real tap exists.
+- [ ] Formula URLs and hashes reference immutable release artifacts.
+- [ ] Formula installation passes in a clean Homebrew CI environment.
 
-- `devdoctor-cli` is not yet published on PyPI at the time of this report; public `pip install devdoctor-cli` works only after release publication.
-- The Homebrew tap is documented for future use but is not implemented yet.
-- PyPI trusted publishing is not configured yet.
-- Screenshot assets are real, but generated from the maintainer workstation; refresh them in a clean terminal before major announcements.
-- Distro package mappings should continue to grow through verified contributions.
+## Evidence policy
 
-## Future Roadmap
+DevDoctor distinguishes:
 
-- Publish `devdoctor-cli` to PyPI.
-- Configure PyPI trusted publishing.
-- Add signed release artifacts.
-- Implement a Homebrew tap formula.
-- Add more distro fixtures for package-manager planning.
-- Publish an external plugin example.
-- Add schema documentation for bootstrap JSON.
-- Add terminal snapshot tests for narrow and wide output.
+- **Unit/fixture verified** — deterministic policy covered by tests.
+- **Clean-wheel verified** — built package installs and starts in a new environment.
+- **Host/container integration verified** — CI exercised a real distro/container package manager.
+- **Manual workstation verified** — behavior was tested on an actual workstation/image.
 
-## Scores
+Synthetic Fedora Atomic and Bazzite containers validate policy only. They are not evidence of real Bazzite workstation, desktop, hardware, reboot, or rpm-ostree deployment behavior.
 
-- Repository score: 95/100
-- Documentation score: 95/100
-- Packaging score: 94/100
-- GitHub score: 96/100
-- PyPI readiness: 92/100
-- Security score: 95/100
-- Performance score: 88/100
-- Testing score: 93/100
-- Open-source readiness: 96/100
+## Promotion rule
 
-Overall score: 94/100
+`v1.2.0rc1` may be tagged only when the current commit's required automated gates are green.
 
-## Recommendation
-
-Ready for GitHub release: yes.
-Ready for PyPI release: yes, after uploading `devdoctor-cli` artifacts.
-Ready for community adoption: yes.
-
-The main remaining release task is external publication: upload `devdoctor-cli` to PyPI and, later, implement the documented Homebrew tap.
+`v1.2.0` stable requires the same gates plus review of release-candidate feedback and no unresolved high-severity regression in install, update, uninstall, repair, rollback, self-update, or package-manager selection.
