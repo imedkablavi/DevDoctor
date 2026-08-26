@@ -2,9 +2,9 @@
 
 DevDoctor is a Linux CLI for workstation inventory, bootstrap planning, and repair guidance. Contributions should keep that scope tight: local evidence, safe command planning, clear terminal output, and no background services.
 
-The Python distribution name is `devdoctor-cli`; the import package and executable command are both `devdoctor`.
+The product is `DevDoctor`, the Python distribution is `devdoctor-workstation`, and the import package and executable command are both `devdoctor`. Do not add active install/update instructions for `devdoctor-cli`; that distribution name belongs to another project.
 
-## Development Setup
+## Development setup
 
 ```bash
 git clone https://github.com/imedkablavi/DevDoctor.git
@@ -32,16 +32,26 @@ python -m build
 python -m twine check dist/*
 ```
 
-## Contribution Guidelines
+Packaging changes must preserve these identities:
+
+```text
+project distribution: devdoctor-workstation
+wheel prefix:         devdoctor_workstation-
+console command:      devdoctor
+import package:       devdoctor
+```
+
+## Contribution guidelines
 
 - Keep probes fast, local, and safe to run without root privileges.
 - Do not use `shell=True`.
-- Do not execute package-manager, service, group, or filesystem-changing commands during inventory or repair scans.
-- Report unavailable data as unavailable. Do not guess versions, package ownership, download sizes, or installed state.
-- Add tests for catalog mappings, repair checks, parser behavior, CLI output, or export shape when you change them.
+- Do not execute package-manager, service, group, or filesystem-changing commands during inventory or ordinary repair scans.
+- Report unavailable data as unavailable. Do not guess versions, package ownership, download sizes, installed state, or hardware support.
+- Add tests for catalog mappings, package identity, repair checks, parser behavior, CLI output, or export shape when you change them.
 - Update README or docs when user-visible behavior changes.
+- Do not promote synthetic/container policy tests as real workstation validation.
 
-## Catalog Entries
+## Catalog entries
 
 Tool catalog entries should include:
 
@@ -55,7 +65,7 @@ Tool catalog entries should include:
 
 Prefer conservative package mappings over broad guesses. If a package requires a vendor repository that DevDoctor cannot configure safely, document the limitation instead of adding a misleading install command.
 
-## Pull Requests
+## Pull requests
 
 Good pull requests are narrow and verifiable. Include:
 
