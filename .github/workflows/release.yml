@@ -55,6 +55,12 @@ jobs:
       - name: Build distributions
         run: python -m build
 
+      - name: Validate distribution filenames
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}-py3-none-any.whl"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}.tar.gz"
+
       - name: Validate distributions
         run: python -m twine check dist/*
 
@@ -66,7 +72,7 @@ jobs:
           /tmp/devdoctor-release-check/bin/devdoctor completion bash >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
           /tmp/devdoctor-release-check/bin/devdoctor self-update --help >/dev/null
-          /tmp/devdoctor-release-check/bin/devdoctor self-update | grep -F devdoctor-cli
+          /tmp/devdoctor-release-check/bin/devdoctor self-update | grep -F devdoctor-workstation
           /tmp/devdoctor-release-check/bin/devdoctor uninstall --help >/dev/null
 
       - name: Add release-specific install script
@@ -115,7 +121,7 @@ jobs:
       - name: Upload distribution artifact
         uses: actions/upload-artifact@v7
         with:
-          name: devdoctor-cli-dist
+          name: devdoctor-workstation-dist
           path: dist/*
           if-no-files-found: error
 
@@ -141,7 +147,7 @@ jobs:
       - name: Download tested release distributions
         uses: actions/download-artifact@v8
         with:
-          name: devdoctor-cli-dist
+          name: devdoctor-workstation-dist
           path: dist
 
       - name: Keep only PyPI distributions
