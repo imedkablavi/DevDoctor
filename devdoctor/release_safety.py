@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Annotated, Any
 
 import typer
