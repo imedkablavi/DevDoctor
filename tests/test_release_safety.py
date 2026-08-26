@@ -54,8 +54,9 @@ def _result(command: tuple[str, ...], output: str) -> CommandResult:
 def test_self_update_uses_published_distribution_name() -> None:
     command = release_safety.self_update_command()
 
-    assert command[-1] == "devdoctor-cli"
-    assert "devdoctor" not in command[-1:]
+    assert command[-1] == "devdoctor-workstation"
+    assert command[-1] != "devdoctor-cli"
+    assert command[-1] != "devdoctor"
 
 
 def test_uninstall_uses_detected_dpkg_owner(monkeypatch: object) -> None:
