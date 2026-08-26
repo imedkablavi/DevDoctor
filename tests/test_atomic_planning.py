@@ -7,16 +7,30 @@ def _git_spec() -> bootstrap.ToolSpec:
     return next(spec for spec in bootstrap.get_bootstrap_tools() if spec.id == "git")
 
 
-def _system(*manager_ids: str) -> dict[str, object]:
+def _system(*manager_ids: str, distribution_id: str = "bazzite") -> dict[str, object]:
     return {
-        "distribution_id": "bazzite",
+        "distribution": "Bazzite" if distribution_id == "bazzite" else "Fedora Linux 42",
+        "distribution_id": distribution_id,
         "package_managers": [{"id": manager_id, "installed": True} for manager_id in manager_ids],
     }
 
 
-def test_atomic_main_planner_reuses_fedora_mapping_for_rpm_ostree(monkeypatch: object) -> None:
-    monkeypatch.setattr(atomic_planning, "_system_is_atomic", lambda system: True)
+def test_atomic_detection_uses_collected_system_context() -> None:
+    assert atomic_planning._system_is_atomic(_system("rpm-ostree", "dnf")) is True
+    assert (
+        atomic_planning._system_is_atomic(
+            {
+                "distribution": "Fedora Linux 42 (Silverblue)",
+                "distribution_id": "fedora",
+                "package_managers": [{"id": "rpm-ostree", "installed": True}],
+            }
+        )
+        is True
+    )
+    assert atomic_planning._system_is_atomic(_system("dnf", distribution_id="fedora")) is False
 
+
+def test_atomic_main_planner_reuses_fedora_mapping_for_rpm_ostree() -> None:
     plan = atomic_planning.atomic_install_plan_for_spec(
         _git_spec(),
         system=_system("dnf", "rpm-ostree", "flatpak"),
@@ -31,9 +45,7 @@ def test_atomic_main_planner_reuses_fedora_mapping_for_rpm_ostree(monkeypatch: o
     assert "dnf" not in plan.command
 
 
-def test_atomic_main_planner_prefers_homebrew_when_mapped(monkeypatch: object) -> None:
-    monkeypatch.setattr(atomic_planning, "_system_is_atomic", lambda system: True)
-
+def test_atomic_main_planner_prefers_homebrew_when_mapped() -> None:
     plan = atomic_planning.atomic_install_plan_for_spec(
         _git_spec(),
         system=_system("brew", "rpm-ostree", "dnf"),
@@ -45,8 +57,39 @@ def test_atomic_main_planner_prefers_homebrew_when_mapped(monkeypatch: object) -
     assert plan.command == ("brew", "install", "git")
 
 
-def test_atomic_main_planner_never_falls_back_to_original_dnf(monkeypatch: object) -> None:
-    monkeypatch.setattr(atomic_planning, "_system_is_atomic", lambda system: True)
+def test_atomic_main_planner_prefers_mapped_user_space_manager_before_layering() -> None:
+    spec = bootstrap.ToolSpec(
+        id="example-node-tool",
+        title="Example Node Tool",
+        category=bootstrap.BootstrapCategory.DEVOPS,
+        executable="example-node-tool",
+        packages={"dnf": "example-node-tool", "npm": "example-node-tool"},
+    )
+
+    plan = atomic_planning.atomic_install_plan_for_spec(
+        spec,
+        system=_system("npm", "rpm-ostree", "dnf"),
+        original=lambda spec, system: None,
+    )
+
+    assert plan is not None
+    assert plan.manager == "npm"
+    assert plan.command == ("npm", "install", "-g", "example-node-tool")
+
+
+def test_atomic_main_planner_prefers_explicit_nix_mapping_before_layering() -> None:
+    plan = atomic_planning.atomic_install_plan_for_spec(
+        _git_spec(),
+        system=_system("nix", "rpm-ostree", "dnf"),
+        original=lambda spec, system: None,
+    )
+
+    assert plan is not None
+    assert plan.manager == "nix"
+    assert plan.command == ("nix", "profile", "install", "nixpkgs#git")
+
+
+def test_atomic_main_planner_never_falls_back_to_original_dnf() -> None:
     called = False
 
     def original(spec: object, *, system: object) -> bootstrap.InstallPlan | None:
