@@ -13,7 +13,7 @@ def _write_fake_python(fake_bin: Path) -> None:
     fake_bin.mkdir(parents=True)
     python3 = fake_bin / "python3"
     python3.write_text(
-        r'''#!/bin/sh
+        r"""#!/bin/sh
 set -eu
 
 if [ "${1:-}" = "-c" ]; then
@@ -63,7 +63,7 @@ PYTHON
 fi
 
 exit 2
-''',
+""",
         encoding="utf-8",
     )
     python3.chmod(0o755)
