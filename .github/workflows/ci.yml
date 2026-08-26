@@ -59,7 +59,7 @@ jobs:
           devdoctor completion fish >/tmp/devdoctor.fish
           devdoctor diagnostics --stdout | python -m json.tool >/tmp/devdoctor-diagnostics.json
           devdoctor self-update --help >/dev/null
-          devdoctor self-update | grep -F devdoctor-cli
+          devdoctor self-update | grep -F devdoctor-workstation
           devdoctor uninstall --help >/dev/null
           devdoctor --json | python -m json.tool >/tmp/devdoctor-inventory.json
 
@@ -88,7 +88,7 @@ jobs:
           /tmp/devdoctor-clean/bin/devdoctor completion bash >/dev/null
           /tmp/devdoctor-clean/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-clean/bin/python -m json.tool >/dev/null
           /tmp/devdoctor-clean/bin/devdoctor self-update --help >/dev/null
-          /tmp/devdoctor-clean/bin/devdoctor self-update | grep -F devdoctor-cli
+          /tmp/devdoctor-clean/bin/devdoctor self-update | grep -F devdoctor-workstation
           /tmp/devdoctor-clean/bin/devdoctor uninstall --help >/dev/null
 
   package-manager-fixtures:
