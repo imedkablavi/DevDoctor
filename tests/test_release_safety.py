@@ -129,7 +129,8 @@ def test_release_safety_replaces_public_mutating_callbacks() -> None:
     release_safety.apply_release_safety(app)
 
     callbacks = {
-        release_safety._command_name(command): command.callback for command in app.registered_commands
+        release_safety._command_name(command): command.callback
+        for command in app.registered_commands
     }
     assert callbacks["self-update"] is release_safety.safe_self_update
     assert callbacks["uninstall"] is release_safety.safe_uninstall
