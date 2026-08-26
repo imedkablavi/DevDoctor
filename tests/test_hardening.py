@@ -79,19 +79,37 @@ def test_atomic_manager_order_prefers_user_space_before_layering() -> None:
     assert order.index("npm") < order.index("rpm-ostree")
 
 
-def test_atomic_system_context_uses_inventory_without_reprobing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_atomic_system_context_uses_persisted_inventory_flag_without_reprobing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         hardening,
         "detect_package_managers",
         lambda: (_ for _ in ()).throw(AssertionError("package managers must not be re-probed")),
     )
+    atomic = {
+        "atomic_host": True,
+        "distribution_id": "fedora",
+        "package_managers": [{"id": "rpm-ostree", "installed": True}],
+    }
+    mutable = {**atomic, "atomic_host": False}
 
-    assert hardening._system_context_is_atomic(
-        {
-            "distribution_id": "fedora",
-            "package_managers": [{"id": "rpm-ostree", "installed": True}],
-        }
-    )
+    assert hardening._system_context_is_atomic(atomic) is True
+    assert hardening._system_context_is_atomic(mutable) is False
+
+
+def test_mutable_fedora_is_not_atomic_only_because_rpm_ostree_is_installed() -> None:
+    system = {
+        "atomic_host": False,
+        "distribution": "Fedora Linux 42",
+        "distribution_id": "fedora",
+        "package_managers": [
+            {"id": "dnf", "installed": True},
+            {"id": "rpm-ostree", "installed": True},
+        ],
+    }
+
+    assert hardening._system_context_is_atomic(system) is False
 
 
 def test_install_plan_for_silverblue_uses_rpm_ostree_not_dnf(
