@@ -99,9 +99,7 @@ def _enforce_memory_budget(
 ) -> None:
     peak = float(summary["max_peak_rss_mib"])
     if peak > limit_mib:
-        raise RuntimeError(
-            f"{section} peak RSS {peak:.2f} MiB exceeds budget {limit_mib:.2f} MiB"
-        )
+        raise RuntimeError(f"{section} peak RSS {peak:.2f} MiB exceeds budget {limit_mib:.2f} MiB")
 
 
 def main() -> int:
