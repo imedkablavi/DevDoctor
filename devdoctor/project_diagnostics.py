@@ -30,9 +30,32 @@ _TOOL_ALIASES = {
     "go": "go",
     "golang": "go",
     "java": "java",
+    "ruby": "ruby",
+    "php": "php",
+    "docker": "docker",
     "terraform": "terraform",
     "kubectl": "kubectl",
 }
+_ATOM_PATTERN = re.compile(
+    r"(>=|<=|==|!=|~=|=|>|<|\^|~)?v?"
+    r"(\d+(?:\.\d+){0,3})(?:\.(x|\*))?"
+)
+_SIMPLE_VERSION_FILES = (
+    (".nvmrc", "node"),
+    (".node-version", "node"),
+    (".python-version", "python"),
+    (".ruby-version", "ruby"),
+    (".java-version", "java"),
+    (".go-version", "go"),
+)
+_DOCKER_MANIFESTS = (
+    "Dockerfile",
+    "compose.yml",
+    "compose.yaml",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+)
+_JAVA_MANIFESTS = ("pom.xml", "build.gradle", "build.gradle.kts")
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,7 +137,11 @@ def _add_requirement(
     tool_id = _TOOL_ALIASES.get(tool.lower())
     if tool_id is None:
         return
-    normalized = constraint.strip() if isinstance(constraint, str) and constraint.strip() else None
+    normalized = (
+        constraint.strip()
+        if isinstance(constraint, str) and constraint.strip()
+        else None
+    )
     requirement = ProjectRequirement(
         tool_id=tool_id,
         source=source,
@@ -123,6 +150,19 @@ def _add_requirement(
     )
     if requirement not in requirements:
         requirements.append(requirement)
+
+
+def _has_requirement(
+    requirements: list[ProjectRequirement],
+    *,
+    tool: str,
+    source: str,
+) -> bool:
+    tool_id = _TOOL_ALIASES.get(tool.lower())
+    return any(
+        item.tool_id == tool_id and item.source == source
+        for item in requirements
+    )
 
 
 def _parse_pyproject(
@@ -136,8 +176,10 @@ def _parse_pyproject(
         warnings.append("pyproject.toml: invalid TOML")
         return
 
+    recognized_python_project = False
     project = document.get("project")
     if isinstance(project, dict):
+        recognized_python_project = True
         requires_python = project.get("requires-python")
         if isinstance(requires_python, str):
             _add_requirement(
@@ -149,19 +191,33 @@ def _parse_pyproject(
             )
 
     tool = document.get("tool")
-    if not isinstance(tool, dict):
-        return
-    poetry = tool.get("poetry")
-    if not isinstance(poetry, dict):
-        return
-    dependencies = poetry.get("dependencies")
-    if isinstance(dependencies, dict) and isinstance(dependencies.get("python"), str):
+    if isinstance(tool, dict):
+        poetry = tool.get("poetry")
+        if isinstance(poetry, dict):
+            recognized_python_project = True
+            dependencies = poetry.get("dependencies")
+            if isinstance(dependencies, dict):
+                python_constraint = dependencies.get("python")
+                if isinstance(python_constraint, str):
+                    _add_requirement(
+                        requirements,
+                        tool="python",
+                        source="pyproject.toml",
+                        constraint=python_constraint,
+                        reason="tool.poetry.dependencies.python",
+                    )
+
+    if recognized_python_project and not _has_requirement(
+        requirements,
+        tool="python",
+        source="pyproject.toml",
+    ):
         _add_requirement(
             requirements,
             tool="python",
             source="pyproject.toml",
-            constraint=dependencies["python"],
-            reason="tool.poetry.dependencies.python",
+            constraint=None,
+            reason="Python project metadata",
         )
 
 
@@ -195,6 +251,7 @@ def _parse_package_json(
     package_manager = document.get("packageManager")
     if isinstance(package_manager, str) and "@" in package_manager:
         manager, version = package_manager.split("@", 1)
+        version = version.split("+", 1)[0]
         if manager in {"npm", "pnpm", "yarn", "bun"} and version:
             _add_requirement(
                 requirements,
@@ -216,6 +273,15 @@ def _parse_package_json(
                     constraint=version,
                     reason=f"volta.{tool}",
                 )
+
+    if not _has_requirement(requirements, tool="node", source="package.json"):
+        _add_requirement(
+            requirements,
+            tool="node",
+            source="package.json",
+            constraint=None,
+            reason="Node project manifest",
+        )
 
 
 def _parse_tool_versions(text: str, requirements: list[ProjectRequirement]) -> None:
@@ -283,6 +349,7 @@ def _parse_cargo(
     except tomllib.TOMLDecodeError:
         warnings.append("Cargo.toml: invalid TOML")
         return
+
     package = document.get("package")
     if isinstance(package, dict) and isinstance(package.get("rust-version"), str):
         _add_requirement(
@@ -292,6 +359,21 @@ def _parse_cargo(
             constraint=f">={package['rust-version']}",
             reason="package.rust-version minimum",
         )
+    if not _has_requirement(requirements, tool="rust", source="Cargo.toml"):
+        _add_requirement(
+            requirements,
+            tool="rust",
+            source="Cargo.toml",
+            constraint=None,
+            reason="Rust package manifest",
+        )
+    _add_requirement(
+        requirements,
+        tool="cargo",
+        source="Cargo.toml",
+        constraint=None,
+        reason="Cargo project manifest",
+    )
 
 
 def _parse_go_mod(text: str, requirements: list[ProjectRequirement]) -> None:
@@ -303,6 +385,14 @@ def _parse_go_mod(text: str, requirements: list[ProjectRequirement]) -> None:
             source="go.mod",
             constraint=f">={match.group(1)}",
             reason="go language version",
+        )
+    else:
+        _add_requirement(
+            requirements,
+            tool="go",
+            source="go.mod",
+            constraint=None,
+            reason="Go module manifest",
         )
 
 
@@ -318,12 +408,14 @@ def _parse_devbox(
         return
     if not isinstance(document, dict):
         return
+
     packages = document.get("packages")
     values: list[str] = []
     if isinstance(packages, list):
         values = [value for value in packages if isinstance(value, str)]
     elif isinstance(packages, dict):
-        values = [str(value) for value in packages.keys()]
+        values = [str(value) for value in packages]
+
     for package in values:
         name, separator, version = package.partition("@")
         tool = _TOOL_ALIASES.get(name.lower())
@@ -377,7 +469,12 @@ def discover_project_requirements(
     for name in ("mise.toml", ".mise.toml"):
         text = read(name)
         if text is not None:
-            _parse_mise(text, source=name, requirements=requirements, warnings=warnings)
+            _parse_mise(
+                text,
+                source=name,
+                requirements=requirements,
+                warnings=warnings,
+            )
 
     text = read("Cargo.toml")
     if text is not None:
@@ -391,18 +488,57 @@ def discover_project_requirements(
     if text is not None:
         _parse_devbox(text, requirements, warnings)
 
-    for name, tool in ((".nvmrc", "node"), (".node-version", "node"), (".python-version", "python")):
+    for name, tool in _SIMPLE_VERSION_FILES:
         text = read(name)
-        if text is not None:
-            value = next((line.strip() for line in text.splitlines() if line.strip()), "")
-            if value:
-                _add_requirement(
-                    requirements,
-                    tool=tool,
-                    source=name,
-                    constraint=value.removeprefix("v"),
-                    reason="project version file",
-                )
+        if text is None:
+            continue
+        value = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        if value:
+            _add_requirement(
+                requirements,
+                tool=tool,
+                source=name,
+                constraint=value.removeprefix("v"),
+                reason="project version file",
+            )
+
+    for name in _DOCKER_MANIFESTS:
+        if read(name) is not None:
+            _add_requirement(
+                requirements,
+                tool="docker",
+                source=name,
+                constraint=None,
+                reason="container project manifest",
+            )
+
+    if read("Gemfile") is not None:
+        _add_requirement(
+            requirements,
+            tool="ruby",
+            source="Gemfile",
+            constraint=None,
+            reason="Ruby dependency manifest",
+        )
+
+    if read("composer.json") is not None:
+        _add_requirement(
+            requirements,
+            tool="php",
+            source="composer.json",
+            constraint=None,
+            reason="PHP dependency manifest",
+        )
+
+    for name in _JAVA_MANIFESTS:
+        if read(name) is not None:
+            _add_requirement(
+                requirements,
+                tool="java",
+                source=name,
+                constraint=None,
+                reason="Java build manifest",
+            )
 
     return tuple(requirements), tuple(sources), tuple(warnings)
 
@@ -427,12 +563,20 @@ def _compare(left: tuple[int, ...], right: tuple[int, ...]) -> int:
     return (left_value > right_value) - (left_value < right_value)
 
 
+def _compatible_upper_bound(required: tuple[int, ...]) -> tuple[int, ...] | None:
+    if len(required) < 2:
+        return None
+    prefix = list(required[:-1])
+    prefix[-1] += 1
+    return tuple(prefix + [0])
+
+
 def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
     value = atom.strip().lower().replace(" ", "")
     if not value or value in {"*", "latest", "system"}:
         return True
 
-    match = re.fullmatch(r"(>=|<=|==|=|>|<|\^|~)?v?(\d+(?:\.\d+){0,3})(?:\.(x|\*))?", value)
+    match = _ATOM_PATTERN.fullmatch(value)
     if not match:
         return None
     operator = match.group(1) or ""
@@ -445,6 +589,8 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
     comparison = _compare(installed, required)
     if operator in {"=", "=="}:
         return comparison == 0
+    if operator == "!=":
+        return comparison != 0
     if operator == ">=":
         return comparison >= 0
     if operator == ">":
@@ -469,14 +615,26 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
         else:
             upper = (required[0] + 1, 0, 0)
         return comparison >= 0 and _compare(installed, upper) < 0
+    if operator == "~=":
+        upper = _compatible_upper_bound(required)
+        if upper is None:
+            return None
+        return comparison >= 0 and _compare(installed, upper) < 0
     return None
 
 
-def version_satisfies(installed_version: str | None, constraint: str | None) -> bool | None:
+def version_satisfies(
+    installed_version: str | None,
+    constraint: str | None,
+) -> bool | None:
     """Evaluate common Python/Node/version-manager constraints conservatively."""
 
-    if constraint is None or constraint.strip().lower() in {"", "*", "latest", "system"}:
+    if constraint is None:
         return True
+    normalized = constraint.strip().lower()
+    if normalized in {"", "*", "latest", "system"}:
+        return True
+
     installed = _numeric_version(installed_version)
     if installed is None:
         return None
@@ -512,10 +670,21 @@ def diagnose_project(root: Path) -> ProjectReport:
         return ProjectReport(project_root.name, sources, (), warnings)
 
     catalog_ids = {spec.id for spec in get_bootstrap_tools()}
-    requested_ids = tuple(sorted({req.tool_id for req in requirements if req.tool_id in catalog_ids}))
+    requested_ids = tuple(
+        sorted(
+            {
+                requirement.tool_id
+                for requirement in requirements
+                if requirement.tool_id in catalog_ids
+            }
+        )
+    )
     inventory = bootstrap_inventory(include_ids=requested_ids) if requested_ids else None
     detections = (
-        {detection.spec.id: detection for detection in inventory.detections}
+        {
+            detection.spec.id: detection
+            for detection in inventory.detections
+        }
         if inventory is not None
         else {}
     )
@@ -535,6 +704,7 @@ def diagnose_project(root: Path) -> ProjectReport:
                 )
             )
             continue
+
         detection = detections.get(requirement.tool_id)
         if detection is None or not detection.installed:
             checks.append(
@@ -545,7 +715,7 @@ def diagnose_project(root: Path) -> ProjectReport:
                     installed=False,
                     installed_version=None,
                     status="missing",
-                    message="required tool is not installed or not discoverable on PATH",
+                    message="required tool is not installed or discoverable on PATH",
                 )
             )
             continue
@@ -559,7 +729,9 @@ def diagnose_project(root: Path) -> ProjectReport:
             message = "installed version does not satisfy the discovered requirement"
         else:
             status = "unknown"
-            message = "installed tool was found, but the version constraint is not safely comparable"
+            message = (
+                "installed tool was found, but the version constraint is not safely comparable"
+            )
         checks.append(
             ProjectCheck(
                 tool_id=requirement.tool_id,
@@ -584,7 +756,12 @@ def render_project_report(report: ProjectReport) -> str:
     if not report.checks:
         lines.append("No supported project tool requirements were found.")
     else:
-        labels = {"ready": "READY", "missing": "MISSING", "mismatch": "MISMATCH", "unknown": "UNKNOWN"}
+        labels = {
+            "ready": "READY",
+            "missing": "MISSING",
+            "mismatch": "MISMATCH",
+            "unknown": "UNKNOWN",
+        }
         for check in report.checks:
             constraint = check.constraint or "installed"
             version = check.installed_version or "not found"
@@ -607,7 +784,11 @@ def register_project_diagnostics_command(app: typer.Typer) -> None:
     @app.command("project")
     def project(
         path: Path = typer.Argument(Path("."), help="Project directory to inspect."),
-        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+        json_output: bool = typer.Option(
+            False,
+            "--json",
+            help="Print machine-readable JSON.",
+        ),
         no_fail: bool = typer.Option(
             False,
             "--no-fail",
