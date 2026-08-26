@@ -181,9 +181,7 @@ def safe_uninstall(
             continue
         plan = uninstall_plan_for_detection(detection, system=inventory.system)
         if plan is None:
-            refused.append(
-                f"{spec.id}: ownership is ambiguous or removal is unsafe on this host"
-            )
+            refused.append(f"{spec.id}: ownership is ambiguous or removal is unsafe on this host")
             continue
         plans.append(plan)
 
