@@ -3,16 +3,18 @@
 Date: 2026-08-27  
 Candidate: `1.2.0rc1`  
 Repository: `imedkablavi/DevDoctor`  
-Python distribution: `devdoctor-cli`  
+Python distribution: `devdoctor-workstation`  
 Executable: `devdoctor`
 
 ## Current decision
 
 **Do not tag `v1.2.0rc1` yet.**
 
-The release-candidate code and release pipeline are prepared, but the final PR head must run through the complete GitHub Actions matrix before a tag is created. A passing workflow from an older commit is useful historical evidence, but it is not accepted as qualification for the current release commit.
+The release-candidate code and release pipeline are prepared, but the final PR head must run through the complete GitHub Actions matrix before a tag is created. Passing workflows from earlier commits remain useful evidence, but they do not qualify the current release commit after distribution metadata, installer, self-update, tests, and release workflow changed.
 
-This document intentionally contains no self-assigned percentage or readiness score. Release status is determined by reproducible checks and external publication state.
+The distribution name was changed before first publication because `devdoctor-cli` is already used by another public project. DevDoctor keeps its product name and `devdoctor` console command; only the Python distribution identifier changes to `devdoctor-workstation`.
+
+This document intentionally contains no self-assigned readiness percentage. Release status is determined by reproducible checks and external publication state.
 
 ## Implemented in the candidate
 
@@ -25,9 +27,10 @@ This document intentionally contains no self-assigned percentage or readiness sc
 - Privacy-scrubbed diagnostic export.
 - Bash, Zsh, and Fish completion generation.
 - Transaction-journaled repair application and rollback paths.
-- Correct `devdoctor-cli` self-update target.
+- `self-update` targets `devdoctor-workstation`.
 - Ownership-verified, fail-closed uninstall planning.
 - Release tag/package-version consistency check.
+- Distribution filename checks for the normalized `devdoctor_workstation` wheel and sdist.
 - One-build release pipeline: tested artifacts are reused for GitHub Release and optional PyPI publication.
 - SHA-256 release manifest.
 - SPDX 2.3 SBOM generation.
@@ -46,6 +49,7 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] Package build with `python -m build`.
 - [ ] `twine check dist/*`.
 - [ ] Project version equals package `__version__`.
+- [ ] Distribution name equals `devdoctor-workstation`.
 - [ ] Console entry point resolves to `devdoctor.entrypoint:main`.
 
 ### Clean installation
@@ -57,7 +61,7 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] Installed `devdoctor --version` works.
 - [ ] Installed completion generation works.
 - [ ] Installed privacy diagnostics produce valid JSON.
-- [ ] Installed `self-update` preview targets `devdoctor-cli`.
+- [ ] Installed `self-update` preview targets `devdoctor-workstation`.
 
 ### Package-manager safety
 
@@ -65,7 +69,7 @@ The exact commit that will be tagged must satisfy all of these gates.
 - [ ] Ubuntu/APT integration passes.
 - [ ] Fedora/DNF integration passes.
 - [ ] Arch/Pacman integration passes.
-- [ ] openSUSE/Zypper integration passes.
+- [ ] SUSE/Zypper integration passes on the pinned official BCI image.
 - [ ] Nix and Flatpak detection integration passes.
 - [ ] Synthetic Fedora Atomic policy test passes without DNF host planning.
 - [ ] Synthetic Bazzite policy test passes without DNF host planning.
@@ -76,6 +80,8 @@ The exact commit that will be tagged must satisfy all of these gates.
 ### Release artifacts
 
 - [ ] Tag version matches package version.
+- [ ] `devdoctor_workstation-1.2.0rc1-py3-none-any.whl` is produced.
+- [ ] `devdoctor_workstation-1.2.0rc1.tar.gz` is produced.
 - [ ] Wheel and sdist are generated once by the release build job.
 - [ ] Clean-wheel validation uses the generated wheel.
 - [ ] `devdoctor-install.sh` is added to the release payload.
@@ -93,13 +99,14 @@ These cannot be proven by repository code alone.
 
 Before setting `PYPI_TRUSTED_PUBLISHING_ENABLED=true`:
 
-- [ ] Create or confirm the `devdoctor-cli` project/pending publisher on PyPI.
+- [ ] Create or confirm the `devdoctor-workstation` project/pending publisher on PyPI.
 - [ ] Configure the trusted publisher for `imedkablavi/DevDoctor` and `.github/workflows/release.yml`.
 - [ ] Configure the GitHub environment named `pypi`.
 - [ ] Add the desired environment reviewer/protection policy.
 - [ ] Confirm the tagged release workflow has `id-token: write` only where required.
+- [ ] Confirm the public PyPI project resolves to this repository before documenting a PyPI install command.
 
-The repository does not use a long-lived PyPI API token for this path.
+Do not configure a publisher for `devdoctor-cli`; that distribution name belongs to another project. The repository does not use a long-lived PyPI API token for this release path.
 
 ### Stable-release repository protection
 
