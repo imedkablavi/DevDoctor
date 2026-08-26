@@ -54,7 +54,9 @@ def generate_sbom(dist_dir: Path) -> dict[str, object]:
     version = str(project["version"])
     dependencies = sorted({_dependency_name(item) for item in project.get("dependencies", [])})
     artifacts = sorted(
-        path for path in dist_dir.iterdir() if path.suffix == ".whl" or path.name.endswith(".tar.gz")
+        path
+        for path in dist_dir.iterdir()
+        if path.suffix == ".whl" or path.name.endswith(".tar.gz")
     )
     artifact_fingerprint = hashlib.sha256()
     for artifact in artifacts:
@@ -143,7 +145,8 @@ def main() -> None:
 
     payload = generate_sbom(args.dist)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    args.output.write_text(serialized, encoding="utf-8")
     print(args.output)
 
 
