@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import typer
 
@@ -101,9 +102,7 @@ def render_support_markdown(snapshot: Mapping[str, Any]) -> str:
     lines.extend(["", "## PATH summary", ""])
     if isinstance(path, Mapping):
         lines.append(f"- Entry count: `{_display(path.get('entry_count'))}`")
-        lines.append(
-            f"- Contains empty PATH entry: `{_display(path.get('contains_empty_entry'))}`"
-        )
+        lines.append(f"- Contains empty PATH entry: `{_display(path.get('contains_empty_entry'))}`")
 
     lines.extend(
         [
