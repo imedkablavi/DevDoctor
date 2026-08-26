@@ -7,6 +7,7 @@ from collections.abc import Callable, Mapping
 from devdoctor import bootstrap
 from devdoctor.models import JsonValue
 from devdoctor.package_managers import ATOMIC_VARIANTS, NIX_PACKAGES
+from devdoctor.utils import read_os_release
 
 OriginalPlanner = Callable[..., bootstrap.InstallPlan | None]
 _PATCHED = False
@@ -21,8 +22,23 @@ def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
     }
 
 
+def _release_is_atomic(release: Mapping[str, str]) -> bool:
+    distro_id = release.get("ID", "").lower()
+    variant_id = release.get("VARIANT_ID", "").lower()
+    image_id = release.get("IMAGE_ID", "").lower()
+    return (
+        distro_id == "bazzite"
+        or variant_id in ATOMIC_VARIANTS
+        or image_id in ATOMIC_VARIANTS
+        or bool(release.get("OSTREE_VERSION"))
+    )
+
+
 def _system_is_atomic(system: Mapping[str, JsonValue]) -> bool:
-    """Use the already-collected host context instead of probing managers again."""
+    """Use the persisted host classification instead of re-probing managers per tool."""
+
+    if "atomic_host" in system:
+        return system.get("atomic_host") is True
 
     distro_id = str(system.get("distribution_id", "")).lower()
     if distro_id == "bazzite":
@@ -36,7 +52,6 @@ def _system_is_atomic(system: Mapping[str, JsonValue]) -> bool:
     if any(marker in distribution for marker in (*ATOMIC_VARIANTS, "atomic", "ostree")):
         return True
 
-    # Universal Blue derivatives are image based when rpm-ostree is the host manager.
     return distro_id in {"ublue", "universal-blue"}
 
 
@@ -86,7 +101,6 @@ def atomic_install_plan_for_spec(
 
     installed = _installed_manager_ids(system)
 
-    # Prefer mapped user-space/package-scoped managers before touching the base image.
     for manager in ("brew", "flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip"):
         if manager not in installed:
             continue
@@ -121,24 +135,34 @@ def atomic_install_plan_for_spec(
             if plan is not None:
                 return plan
 
-    # Never delegate to the mutable-host planner on an Atomic host.
     return None
 
 
 def apply_atomic_planning_patch() -> None:
-    """Patch the bootstrap planner once so every CLI path receives Atomic-safe plans."""
+    """Patch planning/context once so every CLI path shares one Atomic classification."""
 
     global _PATCHED
     if _PATCHED:
         return
-    original = bootstrap.install_plan_for_spec
+
+    original_planner = bootstrap.install_plan_for_spec
+    original_context = bootstrap.detect_system_context
+
+    def detect_system_context(
+        *,
+        specs: object = None,
+    ) -> Mapping[str, JsonValue]:
+        context = dict(original_context(specs=specs))
+        context["atomic_host"] = _release_is_atomic(read_os_release())
+        return context
 
     def planner(
         spec: bootstrap.ToolSpec,
         *,
         system: Mapping[str, JsonValue],
     ) -> bootstrap.InstallPlan | None:
-        return atomic_install_plan_for_spec(spec, system=system, original=original)
+        return atomic_install_plan_for_spec(spec, system=system, original=original_planner)
 
+    bootstrap.detect_system_context = detect_system_context
     bootstrap.install_plan_for_spec = planner
     _PATCHED = True
