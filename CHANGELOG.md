@@ -7,20 +7,50 @@ and this project uses semantic versioning.
 
 ## [Unreleased]
 
+## [1.2.0rc1] - 2026-08-27
+
 ### Added
 
-- Community files for contributing, support, security, code of conduct, roadmap, migration index, and release process.
-- CLI reference, examples, screenshot regeneration notes, and release-readiness report.
-- Real terminal preview assets generated from DevDoctor command output.
-- GitHub issue templates for documentation requests, performance issues, and questions.
-- Tag-based GitHub release workflow that builds and attaches distribution artifacts.
-- Repository metadata tests for package version consistency and local Markdown links.
+- Fixture-driven package-manager policy coverage for APT, DNF, rpm-ostree, Pacman, Zypper, Nix, Flatpak, and mixed-manager hosts.
+- Distro/container integration workflow for Ubuntu/APT, Fedora/DNF, Arch/Pacman, openSUSE/Zypper, Nix, Flatpak, and synthetic Atomic policy checks.
+- Fedora Atomic and Bazzite install-planning policy that suppresses DNF host mutation and prefers mapped user-space tooling before rpm-ostree layering.
+- `manager-conflicts` command for package-manager overlap and Atomic-host policy conflicts.
+- `path-conflicts` command for bounded duplicate executable, version, and package-ownership analysis.
+- Privacy-scrubbed `diagnostics` export without hostname, username, raw PATH values, arbitrary environment values, or secret/token values.
+- Bash, Zsh, and Fish completion generation without editing shell startup files.
+- Transaction-journaled repair application and rollback commands with independent confirmation and bounded rollback allowlists.
+- Startup/bounded-scan benchmark workflow.
+- Python 3.11 through 3.14 clean-wheel installation matrix.
+- Release-specific user-space install script that can download the exact GitHub Release wheel and verify it against `SHA256SUMS`.
+- Deterministic SPDX 2.3 SBOM generation for release artifacts and declared runtime dependencies.
+- GitHub/Sigstore provenance and SBOM attestations for tagged releases.
+- PyPI Trusted Publishing path that reuses the exact artifacts produced by the tagged release build.
+- Release-candidate notes and evidence-based distribution/readiness documentation.
 
 ### Changed
 
-- Python distribution name changed from `devdoctor` to `devdoctor-cli`; the executable command remains `devdoctor`.
-- README installation wording now uses `devdoctor-cli` for PyPI and keeps source/editable install instructions separate.
-- GitHub labels, pull request template, release template, repository topics, and release checklist are more complete.
+- Release candidate version is `1.2.0rc1` and is classified as beta until qualification completes.
+- GitHub Actions workflows use current Node 24/ESM-generation official actions where available.
+- Release tags are rejected when the tag version does not match the package version.
+- Release checksum generation is deterministic and excludes the checksum manifest itself.
+- README positioning now focuses on diagnosing the existing Linux workstation rather than presenting DevDoctor as another environment manager.
+- Documentation distinguishes detection support, fixture verification, container integration, and real-workstation evidence.
+- PyPI and Homebrew installation instructions are no longer presented as available before those external channels are actually published and verified.
+
+### Fixed
+
+- `self-update` now upgrades the `devdoctor-cli` distribution instead of targeting the unrelated/legacy `devdoctor` package name.
+- Project metadata tests now validate the hardened public console entry point, `devdoctor.entrypoint:main`.
+- Hardening tests were reformatted so the CI lint gate can reach the actual test suite.
+
+### Security
+
+- `uninstall` now fails closed unless the selected executable's detected package ownership matches the catalog mapping.
+- RPM ownership on Atomic/Bazzite hosts is not treated as proof that a package is rpm-ostree layered.
+- DNF host mutation is suppressed on Fedora Atomic/Bazzite policy paths.
+- Repair application and rollback remain preview-first and require explicit apply/confirmation paths.
+- Release provenance uses GitHub OIDC/keyless attestations instead of a long-lived signing credential in the repository.
+- PyPI publishing uses Trusted Publishing and does not require a long-lived PyPI API token.
 
 ## [1.1.0] - 2026-06-28
 
