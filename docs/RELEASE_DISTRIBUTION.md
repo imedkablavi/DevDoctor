@@ -1,5 +1,11 @@
 # Release distribution readiness
 
+## Distribution identity
+
+The DevDoctor product and console command remain `DevDoctor` and `devdoctor`.
+
+The Python distribution used for publication is **`devdoctor-workstation`**. The previously planned name `devdoctor-cli` is already used by another public project and must not be used by this repository for PyPI publishing, self-update, installer metadata, or release documentation.
+
 ## Release payload
 
 A qualified tagged release is designed to build one release payload and reuse it for every publication destination:
@@ -10,7 +16,14 @@ A qualified tagged release is designed to build one release payload and reuse it
 - SPDX 2.3 SBOM (`devdoctor.spdx.json`)
 - `SHA256SUMS`
 
-The release workflow validates formatting, lint, tests, package metadata, and a clean wheel installation before the payload is uploaded.
+For `v1.2.0rc1`, the normalized Python artifacts must be:
+
+```text
+devdoctor_workstation-1.2.0rc1-py3-none-any.whl
+devdoctor_workstation-1.2.0rc1.tar.gz
+```
+
+The release workflow validates formatting, lint, tests, package metadata, expected distribution filenames, and a clean wheel installation before the payload is uploaded.
 
 The tag name is also checked against the package version. A tag such as `v1.2.0rc1` must point at code whose package version is exactly `1.2.0rc1`.
 
@@ -19,18 +32,19 @@ The tag name is also checked against the package version. A tag such as `v1.2.0r
 The wheel and sdist are created in the release `build` job. That same job:
 
 1. validates the built distributions,
-2. installs the wheel into a new virtual environment,
-3. runs CLI smoke checks,
-4. creates the SBOM and checksum manifest,
-5. creates provenance and SBOM attestations,
-6. uploads the complete payload as a GitHub Actions artifact, and
-7. creates the GitHub Release for tag-triggered runs.
+2. validates the normalized `devdoctor_workstation` filenames,
+3. installs the wheel into a new virtual environment,
+4. runs CLI and self-update smoke checks,
+5. creates the SBOM and checksum manifest,
+6. creates provenance and SBOM attestations,
+7. uploads the complete payload as a GitHub Actions artifact, and
+8. creates the GitHub Release for tag-triggered runs.
 
 The PyPI job downloads that exact Actions artifact. It does not rebuild the package.
 
 ## PyPI Trusted Publishing
 
-The package name is `devdoctor-cli` and the console command is `devdoctor`.
+The package name is `devdoctor-workstation` and the console command is `devdoctor`.
 
 PyPI publishing is intentionally disabled until external setup is complete. A tag-triggered release publishes to PyPI only when the repository variable below is set:
 
@@ -40,21 +54,24 @@ PYPI_TRUSTED_PUBLISHING_ENABLED=true
 
 Before enabling it:
 
-1. Create or configure the `devdoctor-cli` project/pending publisher on PyPI.
+1. Create or configure the `devdoctor-workstation` project/pending publisher on PyPI.
 2. Add a Trusted Publisher for `imedkablavi/DevDoctor`.
 3. Set the workflow to `.github/workflows/release.yml`.
 4. Set the GitHub environment name to `pypi`.
 5. Create/protect the `pypi` environment in GitHub with the desired reviewer policy.
 6. Run the release workflow without a publication-enabled tag and inspect the generated package artifacts.
-7. Enable the repository variable only when the external publisher configuration is correct.
+7. Confirm the PyPI project metadata points to this repository.
+8. Enable the repository variable only when the external publisher configuration is correct.
 
-Do not add a long-lived PyPI API token for this release path.
+Do not configure a Trusted Publisher or API token for `devdoctor-cli`; that name belongs to another project. Do not add a long-lived PyPI API token for this release path.
 
 ## Install script
 
 `scripts/install.sh` performs a user-space installation using a dedicated virtual environment. It does not invoke `sudo` and refuses a non-interactive install unless `--yes` is explicitly supplied.
 
-For a downloaded release asset:
+The generic script uses `devdoctor-workstation` for PyPI installs. The tagged release workflow produces a release-specific copy that defaults to the GitHub source and exact release version.
+
+For a downloaded tagged release asset:
 
 ```sh
 sh devdoctor-install.sh
@@ -66,13 +83,13 @@ For automation where the caller has already approved the change:
 sh devdoctor-install.sh --yes
 ```
 
-A release candidate can be pinned explicitly:
+For a source checkout before publication:
 
 ```sh
-sh devdoctor-install.sh --version 1.2.0rc1
+sh scripts/install.sh --source github --version 1.2.0rc1
 ```
 
-The script installs versioned environments under the user data directory and repoints the command symlink only after a successful install. Previous version directories are retained for manual rollback.
+The GitHub source downloads the exact `devdoctor_workstation-<version>-py3-none-any.whl` file and `SHA256SUMS`, verifies the wheel, installs into a versioned user-owned environment, and repoints the command symlink only after a successful install. Previous version directories are retained for manual rollback.
 
 ## Checksums
 
@@ -98,7 +115,7 @@ The workflow creates:
 For a downloaded release artifact, GitHub CLI can be used to verify a repository attestation:
 
 ```sh
-gh attestation verify devdoctor_cli-1.2.0rc1-py3-none-any.whl \
+gh attestation verify devdoctor_workstation-1.2.0rc1-py3-none-any.whl \
   --repo imedkablavi/DevDoctor
 ```
 
@@ -120,4 +137,4 @@ Do not advertise `brew install ...` until all of the following are true:
 
 `v1.2.0rc1` is a prerelease. GitHub Release is configured to mark tags containing `rc` as prereleases.
 
-Promotion to a stable `v1.2.0` requires the current commit's full CI/release qualification, review of release-candidate feedback, and no unresolved high-severity mutation or package-manager-selection regression.
+Promotion to a stable `v1.2.0` requires the current commit's full CI/release qualification, review of release-candidate feedback, and no unresolved high-severity mutation, package-manager-selection, installer, self-update, or distribution-identity regression.
