@@ -216,13 +216,15 @@ def _command_name(command: Any) -> str:
 
 
 def apply_release_safety(app: typer.Typer) -> None:
-    """Replace legacy mutating callbacks before Typer builds the public CLI."""
+    """Replace legacy mutating callbacks while preserving public command names."""
 
     replacements = {
         "self-update": safe_self_update,
         "uninstall": safe_uninstall,
     }
     for command in app.registered_commands:
-        replacement = replacements.get(_command_name(command))
+        command_name = _command_name(command)
+        replacement = replacements.get(command_name)
         if replacement is not None:
+            command.name = command_name
             command.callback = replacement
