@@ -205,7 +205,9 @@ def test_safe_diagnostics_do_not_include_raw_home_or_environment_values(
     assert snapshot["privacy"]["environment_values_included"] is False
 
 
-def test_safe_diagnostics_keep_known_session_and_shell_values(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_safe_diagnostics_keep_known_session_and_shell_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setenv("SHELL", "/usr/bin/fish")
     monkeypatch.setattr(
