@@ -19,7 +19,7 @@ from devdoctor.bootstrap import InstallPlan, ToolDetection
 from devdoctor.models import JsonValue
 from devdoctor.utils import run_command
 
-_RELEASE_DISTRIBUTION = "devdoctor-cli"
+_RELEASE_DISTRIBUTION = "devdoctor-workstation"
 
 
 def self_update_command() -> tuple[str, ...]:
@@ -136,7 +136,7 @@ def safe_self_update(
         typer.Option("--no-color", help="Disable terminal colors."),
     ] = False,
 ) -> None:
-    """Preview or upgrade the published ``devdoctor-cli`` distribution."""
+    """Preview or upgrade the published ``devdoctor-workstation`` distribution."""
 
     console = cli.create_console(no_color=no_color)
     command = self_update_command()
