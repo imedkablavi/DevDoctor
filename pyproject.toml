@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "devdoctor-cli"
+name = "devdoctor-workstation"
 version = "1.2.0rc1"
 description = "Diagnose, bootstrap, and repair Linux developer workstations."
 readme = "README.md"
