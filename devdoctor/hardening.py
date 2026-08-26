@@ -73,13 +73,24 @@ def _manager_ids_from_system(system: Mapping[str, Any]) -> set[str]:
 
 
 def _system_context_is_atomic(system: Mapping[str, Any]) -> bool:
-    """Classify an inventory context without launching package-manager probes again."""
+    """Use the inventory's persisted classification without launching new probes."""
+
+    if "atomic_host" in system:
+        return system.get("atomic_host") is True
 
     distro_id = str(system.get("distribution_id", "")).lower()
     if distro_id == "bazzite":
         return True
+
     managers = _manager_ids_from_system(system)
-    return "rpm-ostree" in managers and distro_id in {"fedora", "ublue", "universal-blue"}
+    if "rpm-ostree" not in managers:
+        return False
+
+    distribution = str(system.get("distribution", "")).lower()
+    atomic_markers = ("silverblue", "kinoite", "sericea", "onyx", "atomic", "ostree")
+    if any(marker in distribution for marker in atomic_markers):
+        return True
+    return distro_id in {"ublue", "universal-blue"}
 
 
 def _manager_ids_from_inventory(inventory: Any) -> set[str]:
