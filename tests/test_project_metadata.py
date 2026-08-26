@@ -18,7 +18,7 @@ def test_project_version_matches_package_version() -> None:
 def test_distribution_name_and_console_script_are_stable() -> None:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert metadata["project"]["name"] == "devdoctor-cli"
+    assert metadata["project"]["name"] == "devdoctor-workstation"
     assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.entrypoint:main"}
 
 
