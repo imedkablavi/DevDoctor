@@ -12,7 +12,7 @@ and this project uses semantic versioning.
 ### Added
 
 - Fixture-driven package-manager policy coverage for APT, DNF, rpm-ostree, Pacman, Zypper, Nix, Flatpak, and mixed-manager hosts.
-- Distro/container integration workflow for Ubuntu/APT, Fedora/DNF, Arch/Pacman, openSUSE/Zypper, Nix, Flatpak, and synthetic Atomic policy checks.
+- Distro/container integration workflow for Ubuntu/APT, Fedora/DNF, Arch/Pacman, SUSE/Zypper, Nix, Flatpak, and synthetic Atomic policy checks.
 - Fedora Atomic and Bazzite install-planning policy that suppresses DNF host mutation and prefers mapped user-space tooling before rpm-ostree layering.
 - `manager-conflicts` command for package-manager overlap and Atomic-host policy conflicts.
 - `path-conflicts` command for bounded duplicate executable, version, and package-ownership analysis.
@@ -26,22 +26,27 @@ and this project uses semantic versioning.
 - GitHub/Sigstore provenance and SBOM attestations for tagged releases.
 - PyPI Trusted Publishing path that reuses the exact artifacts produced by the tagged release build.
 - Release-candidate notes and evidence-based distribution/readiness documentation.
+- Explicit release checks for normalized `devdoctor_workstation` wheel and sdist filenames.
 
 ### Changed
 
 - Release candidate version is `1.2.0rc1` and is classified as beta until qualification completes.
+- Python distribution identifier is `devdoctor-workstation`; the product and executable remain `DevDoctor` and `devdoctor`.
+- The previously planned `devdoctor-cli` distribution identifier was abandoned before first publication because it is already used by another public project.
 - GitHub Actions workflows use current Node 24/ESM-generation official actions where available.
 - Release tags are rejected when the tag version does not match the package version.
 - Release checksum generation is deterministic and excludes the checksum manifest itself.
 - README positioning now focuses on diagnosing the existing Linux workstation rather than presenting DevDoctor as another environment manager.
 - Documentation distinguishes detection support, fixture verification, container integration, and real-workstation evidence.
-- PyPI and Homebrew installation instructions are no longer presented as available before those external channels are actually published and verified.
+- PyPI and Homebrew installation instructions are not presented as available before those external channels are actually published and verified.
 
 ### Fixed
 
-- `self-update` now upgrades the `devdoctor-cli` distribution instead of targeting the unrelated/legacy `devdoctor` package name.
-- Project metadata tests now validate the hardened public console entry point, `devdoctor.entrypoint:main`.
+- `self-update` now upgrades `devdoctor-workstation` instead of targeting unrelated or occupied package names.
+- The user-space installer now resolves `devdoctor_workstation-<version>-py3-none-any.whl` and verifies it against the release checksum manifest.
+- Project metadata tests validate the hardened public console entry point, `devdoctor.entrypoint:main`, and the publication distribution name.
 - Hardening tests were reformatted so the CI lint gate can reach the actual test suite.
+- PATH alternate probing no longer reports a duplicate installation when the primary command lookup says the executable is missing.
 
 ### Security
 
