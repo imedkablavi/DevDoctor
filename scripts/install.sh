@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-PACKAGE="devdoctor-cli"
+PACKAGE="devdoctor-workstation"
 REQUESTED_VERSION="latest"
 INSTALL_SOURCE="pypi"
 ASSUME_YES=0
@@ -18,7 +18,7 @@ Installs DevDoctor into a user-owned virtual environment and links
 ~/.local/bin/devdoctor (or $XDG_BIN_HOME/devdoctor). No sudo is used.
 
 Sources:
-  pypi    Install devdoctor-cli from PyPI.
+  pypi    Install devdoctor-workstation from PyPI.
   github  Download the exact release wheel and SHA256SUMS from GitHub,
           verify the wheel, then install it.
 
@@ -115,7 +115,7 @@ trap cleanup EXIT HUP INT TERM
 python3 -m venv "$TEMP_DIR"
 
 if [ "$INSTALL_SOURCE" = "github" ]; then
-  WHEEL_FILE="devdoctor_cli-${REQUESTED_VERSION}-py3-none-any.whl"
+  WHEEL_FILE="devdoctor_workstation-${REQUESTED_VERSION}-py3-none-any.whl"
   RELEASE_BASE="https://github.com/$REPOSITORY/releases/download/v$REQUESTED_VERSION"
   mkdir -p "$DOWNLOAD_DIR"
 
@@ -151,7 +151,7 @@ else
 fi
 
 "$TEMP_DIR/bin/python" -m pip install --no-cache-dir "$INSTALL_SPEC"
-ACTUAL_VERSION="$($TEMP_DIR/bin/python -c 'from importlib.metadata import version; print(version("devdoctor-cli"))')"
+ACTUAL_VERSION="$($TEMP_DIR/bin/python -c 'from importlib.metadata import version; print(version("devdoctor-workstation"))')"
 
 if [ "$REQUESTED_VERSION" != "latest" ] && [ "$ACTUAL_VERSION" != "$REQUESTED_VERSION" ]; then
   echo "Installed version $ACTUAL_VERSION does not match requested $REQUESTED_VERSION." >&2
