@@ -48,9 +48,11 @@ Native host manager: **Pacman**. `yay` and `paru` can be detected as optional co
 
 Fixture coverage: `arch-pacman`.
 
-## openSUSE Tumbleweed / Leap / SLES-like systems
+## openSUSE / SLES-like systems
 
 Native host manager: **Zypper**. DevDoctor has explicit package mappings for the core developer-tool set covered by package-manager tests.
+
+The release-qualification container is pinned to **openSUSE Leap 15.6** so Zypper planning is tested against a stable repository snapshot instead of a rolling Tumbleweed mirror. Tumbleweed and SLES-like systems share the Zypper planning policy, but they are **not** promoted to host-integration-verified status by the Leap job alone.
 
 Fixture coverage: `opensuse-zypper`.
 
