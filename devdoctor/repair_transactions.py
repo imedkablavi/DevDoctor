@@ -239,8 +239,7 @@ def register_repair_transaction_commands(app: typer.Typer) -> None:
             command = tuple(str(part) for part in record.get("rollback_command", ()))
             if not command or not _allowed_rollback_command(command):
                 typer.echo(
-                    "Blocked unrecognized rollback command for "
-                    f"{record.get('tool_id', 'unknown')}."
+                    f"Blocked unrecognized rollback command for {record.get('tool_id', 'unknown')}."
                 )
                 continue
             record["_rollback_tuple"] = command
