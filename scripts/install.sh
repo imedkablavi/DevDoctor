@@ -79,16 +79,37 @@ PYTHON_OK="$(python3 -c 'import sys; print(int(sys.version_info >= (3, 11)))')"
   exit 1
 }
 
+VENV_PROBE="$(mktemp -d "${TMPDIR:-/tmp}/devdoctor-venv-check.XXXXXX")" || {
+  echo "Unable to create a temporary directory for the Python venv preflight." >&2
+  exit 1
+}
+if ! python3 -m venv "$VENV_PROBE/env" >/dev/null 2>&1; then
+  rm -rf "$VENV_PROBE"
+  cat >&2 <<'EOF'
+Python virtual-environment support is required but is not functional.
+On Debian/Ubuntu install the matching python3-venv package, then retry.
+DevDoctor will not install or modify system packages automatically.
+EOF
+  exit 1
+fi
+rm -rf "$VENV_PROBE"
+
 SPEC="$PACKAGE"
 if [ "$REQUESTED_VERSION" != "latest" ]; then
   SPEC="$PACKAGE==$REQUESTED_VERSION"
+fi
+
+LINK="$BIN_HOME/devdoctor"
+if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+  echo "Refusing to replace non-symlink file: $LINK" >&2
+  exit 1
 fi
 
 printf '%s\n' "DevDoctor install preview:" \
   "  source: $INSTALL_SOURCE" \
   "  package: $SPEC" \
   "  data directory: $BASE_DIR" \
-  "  command link: $BIN_HOME/devdoctor" \
+  "  command link: $LINK" \
   "  privilege escalation: none"
 
 if [ "$ASSUME_YES" -ne 1 ]; then
@@ -107,7 +128,16 @@ fi
 mkdir -p "$BASE_DIR" "$BIN_HOME"
 TEMP_DIR="$BASE_DIR/.installing-$$"
 DOWNLOAD_DIR="$BASE_DIR/.download-$$"
+BACKUP_DIR=""
+FINAL_DIR=""
 cleanup() {
+  if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+    if [ -n "$FINAL_DIR" ] && [ ! -d "$FINAL_DIR" ]; then
+      mv "$BACKUP_DIR" "$FINAL_DIR" 2>/dev/null || true
+    else
+      rm -rf "$BACKUP_DIR"
+    fi
+  fi
   rm -rf "$TEMP_DIR" "$DOWNLOAD_DIR"
 }
 trap cleanup EXIT HUP INT TERM
@@ -158,25 +188,36 @@ if [ "$REQUESTED_VERSION" != "latest" ] && [ "$ACTUAL_VERSION" != "$REQUESTED_VE
   exit 1
 fi
 
+"$TEMP_DIR/bin/devdoctor" --version >/dev/null
+
 FINAL_DIR="$BASE_DIR/versions/$ACTUAL_VERSION"
 mkdir -p "$BASE_DIR/versions"
 
 if [ -d "$FINAL_DIR" ]; then
-  rm -rf "$TEMP_DIR"
-else
-  mv "$TEMP_DIR" "$FINAL_DIR"
+  BACKUP_DIR="$BASE_DIR/.replaced-$ACTUAL_VERSION-$$"
+  mv "$FINAL_DIR" "$BACKUP_DIR"
 fi
 
-LINK="$BIN_HOME/devdoctor"
-if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
-  echo "Refusing to replace non-symlink file: $LINK" >&2
+if ! mv "$TEMP_DIR" "$FINAL_DIR"; then
+  if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ ! -d "$FINAL_DIR" ]; then
+    mv "$BACKUP_DIR" "$FINAL_DIR" || true
+  fi
+  echo "Failed to activate the freshly validated DevDoctor environment." >&2
   exit 1
 fi
+
+if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+  rm -rf "$BACKUP_DIR"
+  BACKUP_DIR=""
+fi
+
 ln -sfn "$FINAL_DIR/bin/devdoctor" "$LINK"
+"$LINK" --version
+
 trap - EXIT HUP INT TERM
 rm -rf "$DOWNLOAD_DIR"
 
-"$LINK" --version
 printf '%s\n' \
   "Installed DevDoctor $ACTUAL_VERSION." \
-  "Rollback: repoint $LINK to a previous directory under $BASE_DIR/versions or remove the link."
+  "Re-running the same version replaces its virtual environment with a freshly validated one." \
+  "Rollback across versions: repoint $LINK to a previous directory under $BASE_DIR/versions or remove the link."
