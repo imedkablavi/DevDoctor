@@ -22,6 +22,24 @@ def test_distribution_name_and_console_script_are_stable() -> None:
     assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.entrypoint:main"}
 
 
+def test_occupied_distribution_name_is_not_used_by_release_paths() -> None:
+    release_paths = (
+        ROOT / "pyproject.toml",
+        ROOT / "devdoctor/release_safety.py",
+        ROOT / "scripts/install.sh",
+        ROOT / ".github/workflows/ci.yml",
+        ROOT / ".github/workflows/release.yml",
+        ROOT / "packaging/homebrew/devdoctor.rb.template",
+    )
+
+    stale = [
+        str(path.relative_to(ROOT))
+        for path in release_paths
+        if "devdoctor-cli" in path.read_text(encoding="utf-8")
+    ]
+    assert stale == []
+
+
 def test_local_markdown_links_resolve() -> None:
     markdown_files = [
         ROOT / "README.md",
