@@ -105,6 +105,11 @@ if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
   exit 1
 fi
 
+OLD_LINK_TARGET=""
+if [ -L "$LINK" ]; then
+  OLD_LINK_TARGET="$(readlink "$LINK" 2>/dev/null || true)"
+fi
+
 printf '%s\n' "DevDoctor install preview:" \
   "  source: $INSTALL_SOURCE" \
   "  package: $SPEC" \
@@ -130,17 +135,34 @@ TEMP_DIR="$BASE_DIR/.installing-$$"
 DOWNLOAD_DIR="$BASE_DIR/.download-$$"
 BACKUP_DIR=""
 FINAL_DIR=""
+FINAL_CREATED=0
+LINK_CHANGED=0
+ACTIVATED=0
+
 cleanup() {
-  if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
-    if [ -n "$FINAL_DIR" ] && [ ! -d "$FINAL_DIR" ]; then
-      mv "$BACKUP_DIR" "$FINAL_DIR" 2>/dev/null || true
-    else
-      rm -rf "$BACKUP_DIR"
+  if [ "$ACTIVATED" -ne 1 ]; then
+    if [ "$FINAL_CREATED" -eq 1 ] && [ -n "$FINAL_DIR" ] && [ -d "$FINAL_DIR" ]; then
+      rm -rf "$FINAL_DIR"
     fi
+    if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ -n "$FINAL_DIR" ]; then
+      mv "$BACKUP_DIR" "$FINAL_DIR" 2>/dev/null || true
+    fi
+    if [ "$LINK_CHANGED" -eq 1 ]; then
+      if [ -n "$OLD_LINK_TARGET" ]; then
+        ln -sfn "$OLD_LINK_TARGET" "$LINK" 2>/dev/null || true
+      else
+        rm -f "$LINK"
+      fi
+    fi
+  elif [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+    rm -rf "$BACKUP_DIR"
   fi
   rm -rf "$TEMP_DIR" "$DOWNLOAD_DIR"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 python3 -m venv "$TEMP_DIR"
 
@@ -199,20 +221,20 @@ if [ -d "$FINAL_DIR" ]; then
 fi
 
 if ! mv "$TEMP_DIR" "$FINAL_DIR"; then
-  if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ ! -d "$FINAL_DIR" ]; then
-    mv "$BACKUP_DIR" "$FINAL_DIR" || true
-  fi
   echo "Failed to activate the freshly validated DevDoctor environment." >&2
   exit 1
 fi
+FINAL_CREATED=1
+
+ln -sfn "$FINAL_DIR/bin/devdoctor" "$LINK"
+LINK_CHANGED=1
+"$LINK" --version
+ACTIVATED=1
 
 if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
   rm -rf "$BACKUP_DIR"
   BACKUP_DIR=""
 fi
-
-ln -sfn "$FINAL_DIR/bin/devdoctor" "$LINK"
-"$LINK" --version
 
 trap - EXIT HUP INT TERM
 rm -rf "$DOWNLOAD_DIR"
