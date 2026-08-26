@@ -83,11 +83,13 @@ For automation where the caller has already approved the change:
 sh devdoctor-install.sh --yes
 ```
 
-For a source checkout before publication:
+The generic GitHub source mode is valid only after the requested GitHub Release exists:
 
 ```sh
 sh scripts/install.sh --source github --version 1.2.0rc1
 ```
+
+Before a GitHub or PyPI release exists, install a development checkout directly from the repository instead of using a release installer.
 
 The GitHub source downloads the exact `devdoctor_workstation-<version>-py3-none-any.whl` file and `SHA256SUMS`, verifies the wheel, installs into a versioned user-owned environment, and repoints the command symlink only after a successful install. Previous version directories are retained for manual rollback.
 
