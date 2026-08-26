@@ -22,6 +22,9 @@ from devdoctor.package_managers import (
 from devdoctor.utils import read_os_release
 
 _REGISTERED_APP_IDS: set[int] = set()
+_ATOMIC_USER_SPACE_ORDER = ("brew", "flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip")
+_ALLOWED_SESSION_TYPES = {"wayland", "x11", "tty"}
+_ALLOWED_SHELL_NAMES = {"bash", "zsh", "fish", "sh", "dash", "ksh", "csh", "tcsh", "nu"}
 
 
 def installed_manager_ids(managers: Iterable[PackageManagerInfo] | None = None) -> set[str]:
@@ -40,7 +43,7 @@ def atomic_safe_manager_order(
     installed = installed_manager_ids(manager_tuple)
     release_data = dict(release or read_os_release())
     if is_atomic_host(release_data, manager_tuple):
-        order = ("brew", "rpm-ostree", "flatpak", "nix", "cargo", "npm", "pnpm", "pipx", "pip")
+        order = (*_ATOMIC_USER_SPACE_ORDER, "rpm-ostree")
         return tuple(manager for manager in order if manager in installed)
 
     distro_id = release_data.get("ID", "").lower()
@@ -60,9 +63,8 @@ def atomic_safe_manager_order(
     return tuple(manager for manager in order if manager in installed)
 
 
-def _manager_ids_from_inventory(inventory: Any) -> set[str]:
-    system = getattr(inventory, "system", {})
-    values = system.get("package_managers", ()) if isinstance(system, Mapping) else ()
+def _manager_ids_from_system(system: Mapping[str, Any]) -> set[str]:
+    values = system.get("package_managers", ())
     return {
         str(item.get("id"))
         for item in values
@@ -70,18 +72,24 @@ def _manager_ids_from_inventory(inventory: Any) -> set[str]:
     }
 
 
-def _inventory_atomic(inventory: Any) -> bool:
-    managers = _manager_ids_from_inventory(inventory)
-    system = getattr(inventory, "system", {})
-    distro_id = (
-        str(system.get("distribution_id", "")).lower() if isinstance(system, Mapping) else ""
-    )
+def _system_context_is_atomic(system: Mapping[str, Any]) -> bool:
+    """Classify an inventory context without launching package-manager probes again."""
+
+    distro_id = str(system.get("distribution_id", "")).lower()
     if distro_id == "bazzite":
         return True
-    release = read_os_release()
-    if is_atomic_host(release, detect_package_managers()):
-        return True
+    managers = _manager_ids_from_system(system)
     return "rpm-ostree" in managers and distro_id in {"fedora", "ublue", "universal-blue"}
+
+
+def _manager_ids_from_inventory(inventory: Any) -> set[str]:
+    system = getattr(inventory, "system", {})
+    return _manager_ids_from_system(system) if isinstance(system, Mapping) else set()
+
+
+def _inventory_atomic(inventory: Any) -> bool:
+    system = getattr(inventory, "system", {})
+    return _system_context_is_atomic(system) if isinstance(system, Mapping) else False
 
 
 def apply_runtime_hardening() -> None:
@@ -97,37 +105,23 @@ def apply_runtime_hardening() -> None:
     original_cache_commands = cli._cache_clean_commands
 
     def preferred_install_manager(spec: Any, system: Mapping[str, Any]) -> tuple[str, str] | None:
-        managers = system.get("package_managers", ())
-        installed = {
-            str(item.get("id"))
-            for item in managers
-            if isinstance(item, Mapping) and item.get("installed") is True
-        }
-        release = read_os_release()
-        atomic = is_atomic_host(release, detect_package_managers()) or (
-            str(system.get("distribution_id", "")).lower() == "bazzite"
-        )
-        if atomic:
-            for manager in (
-                "brew",
-                "rpm-ostree",
-                "flatpak",
-                "nix",
-                "cargo",
-                "npm",
-                "pnpm",
-                "pipx",
-                "pip",
-            ):
+        installed = _manager_ids_from_system(system)
+        if _system_context_is_atomic(system):
+            for manager in (*_ATOMIC_USER_SPACE_ORDER, "rpm-ostree"):
                 if manager in installed and manager in spec.packages:
-                    reason = (
-                        "Atomic/image-based host policy: prefer user-space tooling before "
-                        "rpm-ostree layering and never use dnf for host mutation."
-                    )
+                    if manager == "rpm-ostree":
+                        reason = (
+                            "Atomic/image-based host policy: no mapped user-space manager is "
+                            "available, so use explicit rpm-ostree layering and never dnf."
+                        )
+                    else:
+                        reason = (
+                            "Atomic/image-based host policy: prefer mapped user-space tooling "
+                            "before rpm-ostree layering and never use dnf for host mutation."
+                        )
                     return manager, reason
             return None
-        result = original_preferred(spec, system)
-        return result
+        return original_preferred(spec, system)
 
     def update_commands(inventory: Any) -> tuple[tuple[str, ...], ...]:
         if not _inventory_atomic(inventory):
@@ -186,6 +180,16 @@ def _path_class(path: str | None) -> str | None:
     return "other"
 
 
+def _normalized_session_type() -> str:
+    value = os.environ.get("XDG_SESSION_TYPE", "").strip().lower()
+    return value if value in _ALLOWED_SESSION_TYPES else "unknown"
+
+
+def _normalized_shell_name() -> str:
+    value = Path(os.environ.get("SHELL", "")).name.strip().lower()
+    return value if value in _ALLOWED_SHELL_NAMES else "unknown"
+
+
 def safe_diagnostic_snapshot() -> dict[str, Any]:
     """Build a richer diagnostic bundle without usernames, hostnames, env secrets, or raw PATH."""
 
@@ -201,8 +205,8 @@ def safe_diagnostic_snapshot() -> dict[str, Any]:
             "architecture": platform.machine() or "unknown",
             "kernel": platform.release(),
             "python": platform.python_version(),
-            "session_type": os.environ.get("XDG_SESSION_TYPE", "unknown"),
-            "shell": Path(os.environ.get("SHELL", "")).name or "unknown",
+            "session_type": _normalized_session_type(),
+            "shell": _normalized_shell_name(),
             "atomic_host": is_atomic_host(release, managers),
         },
         "package_managers": [
@@ -237,6 +241,26 @@ def safe_diagnostic_snapshot() -> dict[str, Any]:
             "raw_path_included": False,
         },
     }
+
+
+def _registered_name(item: Any) -> str | None:
+    explicit = getattr(item, "name", None)
+    if explicit:
+        return str(explicit)
+    callback = getattr(item, "callback", None)
+    callback_name = getattr(callback, "__name__", "")
+    return callback_name.replace("_", "-") if callback_name else None
+
+
+def top_level_command_names(app: typer.Typer) -> tuple[str, ...]:
+    """Return the commands/groups Typer will actually expose at invocation time."""
+
+    names = {
+        name
+        for item in (*app.registered_commands, *app.registered_groups)
+        if (name := _registered_name(item))
+    }
+    return tuple(sorted(names))
 
 
 def completion_script(shell: str, commands: Sequence[str], tools: Sequence[str]) -> str:
@@ -328,27 +352,7 @@ def register_hardening_commands(app: typer.Typer) -> None:
 
         from devdoctor.bootstrap import get_bootstrap_tools
 
-        commands = (
-            "benchmark",
-            "check",
-            "completion",
-            "diagnostics",
-            "doctor",
-            "export",
-            "health",
-            "install",
-            "manager-conflicts",
-            "path-conflicts",
-            "profiles",
-            "repair",
-            "repair-apply",
-            "repair-rollback",
-            "search",
-            "self-update",
-            "uninstall",
-            "update",
-            "verify",
-        )
+        commands = top_level_command_names(app)
         tools = tuple(spec.id for spec in get_bootstrap_tools())
         try:
             typer.echo(completion_script(shell, commands, tools), nl=False)
