@@ -43,11 +43,9 @@ jobs:
               --expected-manager pacman --expected-plan-manager pacman
           '
 
-      - name: openSUSE Leap / Zypper planning
+      - name: SUSE BCI / Zypper planning
         run: |
-          docker run --rm -v "$PWD:/src:ro" -w /src opensuse/leap:15.6 sh -lc '
-            zypper --non-interactive --gpg-auto-import-keys refresh --force >/dev/null &&
-            zypper --non-interactive install python3 python3-pip >/dev/null &&
+          docker run --rm -v "$PWD:/src:ro" -w /src registry.suse.com/bci/python:3.13 sh -lc '
             python3 -m pip install /src >/dev/null &&
             python3 /src/tests/integration/container_probe.py \
               --expected-manager zypper --expected-plan-manager zypper
