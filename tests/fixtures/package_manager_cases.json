@@ -20,7 +20,7 @@
     "release": {"ID": "fedora", "VARIANT_ID": "silverblue", "OSTREE_VERSION": "42.1"},
     "installed": ["dnf", "rpm", "rpm-ostree", "flatpak"],
     "expected_atomic": true,
-    "expected_primary": "rpm-ostree",
+    "expected_primary": "flatpak",
     "expected_conflicts": ["atomic-host-dnf"]
   },
   {
