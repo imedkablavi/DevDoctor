@@ -19,7 +19,7 @@ def test_distribution_name_and_console_script_are_stable() -> None:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert metadata["project"]["name"] == "devdoctor-cli"
-    assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.cli:app"}
+    assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.entrypoint:main"}
 
 
 def test_local_markdown_links_resolve() -> None:
