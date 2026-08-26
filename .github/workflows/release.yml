@@ -5,12 +5,6 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      publish_pypi:
-        description: "Publish the built distributions to PyPI using trusted publishing"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -76,7 +70,10 @@ jobs:
 
       - name: Generate SHA-256 checksums
         working-directory: dist
-        run: sha256sum * > SHA256SUMS
+        run: |
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' \
+            | sort \
+            | xargs sha256sum > SHA256SUMS
 
       - name: Verify checksums
         working-directory: dist
@@ -113,7 +110,9 @@ jobs:
           prerelease: ${{ contains(github.ref_name, 'rc') }}
 
   publish-pypi:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_pypi
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') &&
+      vars.PYPI_TRUSTED_PUBLISHING_ENABLED == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
@@ -121,14 +120,18 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Download built distributions
+      - name: Download tested release distributions
         uses: actions/download-artifact@v7
         with:
           name: devdoctor-cli-dist
           path: dist
 
-      - name: Remove non-PyPI release payloads
-        run: rm -f dist/SHA256SUMS dist/devdoctor-install.sh dist/devdoctor.spdx.json
+      - name: Keep only PyPI distributions
+        run: |
+          find dist -maxdepth 1 -type f \
+            ! -name '*.whl' \
+            ! -name '*.tar.gz' \
+            -delete
 
       - name: Publish with PyPI trusted publishing
         uses: pypa/gh-action-pypi-publish@release/v1
