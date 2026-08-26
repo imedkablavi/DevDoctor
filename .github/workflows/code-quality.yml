@@ -36,5 +36,11 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Validate distribution identity
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}-py3-none-any.whl"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}.tar.gz"
+
       - name: Validate package metadata
         run: python -m twine check dist/*
