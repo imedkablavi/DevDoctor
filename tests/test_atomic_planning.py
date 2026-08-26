@@ -15,6 +15,30 @@ def _system(*manager_ids: str, distribution_id: str = "bazzite") -> dict[str, ob
     }
 
 
+def test_release_classification_requires_real_atomic_release_evidence() -> None:
+    assert atomic_planning._release_is_atomic({"ID": "bazzite"}) is True
+    assert (
+        atomic_planning._release_is_atomic(
+            {"ID": "fedora", "VARIANT_ID": "silverblue", "OSTREE_VERSION": "42.20260827"}
+        )
+        is True
+    )
+    assert atomic_planning._release_is_atomic({"ID": "fedora"}) is False
+
+
+def test_persisted_atomic_host_flag_overrides_rpm_ostree_presence() -> None:
+    mutable_fedora = {
+        "atomic_host": False,
+        "distribution": "Fedora Linux 42",
+        "distribution_id": "fedora",
+        "package_managers": [{"id": "rpm-ostree", "installed": True}],
+    }
+    atomic_fedora = {**mutable_fedora, "atomic_host": True}
+
+    assert atomic_planning._system_is_atomic(mutable_fedora) is False
+    assert atomic_planning._system_is_atomic(atomic_fedora) is True
+
+
 def test_atomic_detection_uses_collected_system_context() -> None:
     assert atomic_planning._system_is_atomic(_system("rpm-ostree", "dnf")) is True
     assert (
