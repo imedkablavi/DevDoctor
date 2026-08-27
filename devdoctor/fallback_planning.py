@@ -9,6 +9,10 @@ from devdoctor.models import JsonValue
 from devdoctor.package_managers import NIX_PACKAGES
 
 _PATCHED = False
+_NIX_CATALOG_KEYS = {
+    "rustc": "tool.rust",
+    "gh": "tool.github_cli",
+}
 
 
 def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
@@ -20,6 +24,11 @@ def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
     }
 
 
+def _nix_package(spec: bootstrap.ToolSpec) -> str | None:
+    key = _NIX_CATALOG_KEYS.get(spec.id, f"tool.{spec.id}")
+    return spec.packages.get("nix") or NIX_PACKAGES.get(key)
+
+
 def nix_plan_for_spec(
     spec: bootstrap.ToolSpec,
     *,
@@ -29,7 +38,7 @@ def nix_plan_for_spec(
 
     if "nix" not in _installed_manager_ids(system):
         return None
-    package = NIX_PACKAGES.get(f"tool.{spec.id}")
+    package = _nix_package(spec)
     if package is None:
         return None
     command, dry_run, rollback = bootstrap._manager_commands("nix", package)
