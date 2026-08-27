@@ -22,27 +22,29 @@ def test_installer_preflights_venv_before_creating_devdoctor_directories() -> No
     assert "will not install or modify system packages automatically" in text
 
 
-def test_installer_repairs_same_version_with_rollback_safe_swap() -> None:
+def test_installer_never_moves_or_renames_the_created_virtualenv() -> None:
     text = INSTALLER.read_text(encoding="utf-8")
 
-    assert 'BACKUP_DIR="$BASE_DIR/.replaced-$ACTUAL_VERSION-$$"' in text
-    assert 'mv "$FINAL_DIR" "$BACKUP_DIR"' in text
-    assert 'mv "$TEMP_DIR" "$FINAL_DIR"' in text
-    assert 'mv "$BACKUP_DIR" "$FINAL_DIR"' in text
-    assert '"$TEMP_DIR/bin/devdoctor" --version >/dev/null' in text
+    creation = text.index('python3 -m venv "$ENV_DIR"')
+    validation = text.index('"$ENV_DIR/bin/devdoctor" --version >/dev/null')
+    activation = text.index('ln -sfn "$ENV_DIR/bin/devdoctor" "$LINK"')
+
+    assert creation < validation < activation
+    assert 'mv "$ENV_DIR"' not in text
+    assert 'mv "$TEMP_DIR"' not in text
+    assert "console-script shebangs embed this absolute path" in text
 
 
-def test_installer_restores_environment_and_link_until_activation_commits() -> None:
+def test_installer_serializes_activation_and_rolls_back_symlinks() -> None:
     text = INSTALLER.read_text(encoding="utf-8")
 
-    activation_check = text.index('"$LINK" --version')
-    activation_commit = text.index("ACTIVATED=1")
-    backup_delete = text.index('rm -rf "$BACKUP_DIR"', activation_commit)
-
-    assert activation_check < activation_commit < backup_delete
+    assert 'LOCK_DIR="$BASE_DIR/.install.lock"' in text
+    assert 'mkdir "$LOCK_DIR"' in text
     assert 'OLD_LINK_TARGET="$(readlink "$LINK"' in text
-    assert 'ln -sfn "$OLD_LINK_TARGET" "$LINK"' in text
-    assert 'rm -rf "$FINAL_DIR"' in text
+    assert 'OLD_VERSION_TARGET="$(readlink "$VERSION_LINK"' in text
+    assert 'restore_symlink "$OLD_LINK_TARGET" "$LINK"' in text
+    assert 'restore_symlink "$OLD_VERSION_TARGET" "$VERSION_LINK"' in text
+    assert 'rm -rf "$ENV_DIR"' in text
     assert "trap cleanup EXIT" in text
     assert "trap 'exit 130' INT" in text
     assert "trap 'exit 143' TERM" in text
