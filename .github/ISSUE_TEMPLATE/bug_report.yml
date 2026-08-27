@@ -6,13 +6,17 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve DevDoctor. Please include enough detail for maintainers to reproduce the bootstrap inventory, install plan, or command behavior.
+        Thanks for helping improve DevDoctor. Please include enough detail to reproduce the problem.
+
+        Before submitting, run `devdoctor support --stdout` when possible. It produces a bounded Markdown report from privacy-scrubbed diagnostics. Review the output before pasting it and remove anything you do not want to publish.
+
+        For project compatibility problems, also run `devdoctor project . --json --no-fail` from the affected project directory. This command reads supported manifests but does not execute project hooks or scripts.
   - type: input
     id: version
     attributes:
       label: DevDoctor version
       description: Run `devdoctor --version`.
-      placeholder: "1.1.0"
+      placeholder: "1.2.0rc1"
     validations:
       required: true
   - type: input
@@ -29,24 +33,23 @@ body:
       label: Area
       options:
         - Inventory
+        - Project compatibility
         - Install plan
+        - Installer or self-update
         - Repair suggestion
+        - Repair transaction or rollback
         - PATH analysis
+        - Package manager
+        - Diagnostics or support report
         - Search
         - Command execution
         - Export
         - Profile
-        - Package manager
+        - Release or packaging
         - Legacy health command
         - Documentation
     validations:
       required: true
-  - type: input
-    id: terminal
-    attributes:
-      label: Terminal
-      description: Terminal emulator and color mode if output-related.
-      placeholder: "GNOME Terminal truecolor, Konsole 256-color, tmux"
   - type: textarea
     id: command
     attributes:
@@ -68,13 +71,32 @@ body:
     validations:
       required: true
   - type: textarea
+    id: support
+    attributes:
+      label: DevDoctor support report
+      description: Paste reviewed output from `devdoctor support --stdout`. Do not paste secrets or unrelated private data.
+      render: markdown
+  - type: textarea
+    id: project
+    attributes:
+      label: Project compatibility report
+      description: For project-specific problems, paste reviewed output from `devdoctor project . --json --no-fail`.
+      render: json
+  - type: textarea
     id: logs
     attributes:
-      label: Output
-      description: Paste relevant terminal output. Remove secrets before submitting.
+      label: Relevant output
+      description: Paste only the smallest terminal output needed to reproduce the problem. Remove secrets before submitting.
       render: text
   - type: textarea
     id: screenshot
     attributes:
       label: Screenshot or recording
       description: Drag screenshots or terminal recordings here for visual issues.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed the information above and removed secrets, tokens, credentials, and unrelated private data.
+          required: true

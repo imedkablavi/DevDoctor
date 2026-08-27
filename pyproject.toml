@@ -3,8 +3,8 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "devdoctor-cli"
-version = "1.1.0"
+name = "devdoctor-workstation"
+version = "1.2.0rc1"
 description = "Diagnose, bootstrap, and repair Linux developer workstations."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,7 +25,7 @@ keywords = [
   "workstation",
 ]
 classifiers = [
-  "Development Status :: 5 - Production/Stable",
+  "Development Status :: 4 - Beta",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
@@ -50,6 +50,7 @@ dependencies = [
 dev = [
   "build>=1.2.1",
   "pytest>=8.2.0",
+  "pytest-timeout>=2.3.1",
   "ruff>=0.6.0",
   "twine>=5.1.0",
 ]
@@ -63,13 +64,13 @@ Changelog = "https://github.com/imedkablavi/DevDoctor/blob/main/CHANGELOG.md"
 Security = "https://github.com/imedkablavi/DevDoctor/security/policy"
 
 [project.scripts]
-devdoctor = "devdoctor.cli:app"
+devdoctor = "devdoctor.entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["devdoctor"]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = "-ra --timeout=30"
 testpaths = ["tests"]
 
 [tool.ruff]

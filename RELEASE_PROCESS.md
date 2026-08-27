@@ -2,15 +2,27 @@
 
 This is the public release checklist for DevDoctor maintainers.
 
+## Identity
+
+The release identity must remain consistent:
+
+- GitHub/project name: `DevDoctor`
+- Python import package: `devdoctor`
+- Installed command: `devdoctor`
+- Python distribution: `devdoctor-workstation`
+
+`devdoctor-cli` is not this project's publication name and must not appear in active installation, self-update, artifact, or PyPI publishing instructions.
+
 ## Prepare
 
 1. Confirm `pyproject.toml` and `devdoctor/__init__.py` contain the same version.
-2. Confirm `pyproject.toml` uses distribution name `devdoctor-cli`.
-3. Confirm `[project.scripts]` still exposes `devdoctor`.
+2. Confirm `pyproject.toml` uses distribution name `devdoctor-workstation`.
+3. Confirm `[project.scripts]` exposes `devdoctor = "devdoctor.entrypoint:main"`.
 4. Update `CHANGELOG.md`.
-5. Add release notes under `docs/`.
+5. Add or update release notes under `docs/`.
 6. Review README commands, screenshots, badges, and links.
-7. Confirm issue templates, labels, and release template still match the project.
+7. Confirm release-critical workflows target the current package identity.
+8. Confirm the current PR head is the commit being qualified.
 
 ## Validate
 
@@ -27,40 +39,55 @@ python -m build
 python -m twine check dist/*
 ```
 
-Before the first PyPI upload, this command is expected to report no matching distribution:
+Validate normalized artifact names:
 
 ```bash
-python -m pip index versions devdoctor-cli || true
+VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+test -f "dist/devdoctor_workstation-${VERSION}-py3-none-any.whl"
+test -f "dist/devdoctor_workstation-${VERSION}.tar.gz"
 ```
 
-## Fresh Environment Check
+## Fresh environment check
 
 ```bash
 python -m venv /tmp/devdoctor-release-check
-/tmp/devdoctor-release-check/bin/python -m pip install --find-links dist devdoctor-cli
+/tmp/devdoctor-release-check/bin/python -m pip install --no-cache-dir dist/*.whl
 /tmp/devdoctor-release-check/bin/devdoctor --version
-/tmp/devdoctor-release-check/bin/devdoctor --quiet
+/tmp/devdoctor-release-check/bin/devdoctor diagnostics --stdout | python -m json.tool
+/tmp/devdoctor-release-check/bin/devdoctor self-update
 ```
+
+The self-update preview must contain `devdoctor-workstation`.
+
+## PyPI Trusted Publishing
+
+Before enabling publication:
+
+1. Create or confirm the PyPI pending publisher/project named `devdoctor-workstation`.
+2. Configure repository `imedkablavi/DevDoctor`.
+3. Configure workflow `.github/workflows/release.yml`.
+4. Configure GitHub environment `pypi`.
+5. Confirm PyPI metadata links back to this repository.
+6. Set `PYPI_TRUSTED_PUBLISHING_ENABLED=true` only after this setup is complete.
+
+Do not configure `devdoctor-cli` for this repository and do not use a long-lived PyPI token for the prepared workflow.
 
 ## Publish
 
-1. Push the release commit and wait for CI.
-2. Create a signed tag when possible.
-3. Push the tag.
-4. Attach the `devdoctor_cli-<version>` wheel and source distribution from `dist/` to the GitHub release.
-5. Publish `devdoctor-cli` to PyPI after `twine check` passes.
-6. Verify installation from PyPI in a clean virtual environment:
+1. Require final-head CI, code quality, distro integration, and release qualification to pass.
+2. Merge the qualified release PR.
+3. Create the version tag only on the qualified merged commit.
+4. Push the tag and let `.github/workflows/release.yml` build the release once.
+5. Verify GitHub Release contains the wheel, sdist, installer, SBOM, and checksum manifest.
+6. Verify attestations and `SHA256SUMS`.
+7. If PyPI publishing is enabled, verify the public package from a clean environment:
 
 ```bash
 python -m venv /tmp/devdoctor-pypi-check
-/tmp/devdoctor-pypi-check/bin/python -m pip install devdoctor-cli
+/tmp/devdoctor-pypi-check/bin/python -m pip install devdoctor-workstation
 /tmp/devdoctor-pypi-check/bin/devdoctor --version
 ```
 
-## Future Homebrew Tap
+## Homebrew
 
-The tap is not implemented yet. When it exists, the intended install command is:
-
-```bash
-brew install imedkablavi/tap/devdoctor
-```
+Homebrew is not a publication channel until a real tap and clean installation CI exist. Do not advertise a `brew install` command before then.

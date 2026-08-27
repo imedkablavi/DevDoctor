@@ -18,8 +18,26 @@ def test_project_version_matches_package_version() -> None:
 def test_distribution_name_and_console_script_are_stable() -> None:
     metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert metadata["project"]["name"] == "devdoctor-cli"
-    assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.cli:app"}
+    assert metadata["project"]["name"] == "devdoctor-workstation"
+    assert metadata["project"]["scripts"] == {"devdoctor": "devdoctor.entrypoint:main"}
+
+
+def test_occupied_distribution_name_is_not_used_by_release_paths() -> None:
+    release_paths = (
+        ROOT / "pyproject.toml",
+        ROOT / "devdoctor/release_safety.py",
+        ROOT / "scripts/install.sh",
+        ROOT / ".github/workflows/ci.yml",
+        ROOT / ".github/workflows/release.yml",
+        ROOT / "packaging/homebrew/devdoctor.rb.template",
+    )
+
+    stale = [
+        str(path.relative_to(ROOT))
+        for path in release_paths
+        if "devdoctor-cli" in path.read_text(encoding="utf-8")
+    ]
+    assert stale == []
 
 
 def test_local_markdown_links_resolve() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -173,7 +174,16 @@ def analyze_path(
 
 
 def executable_paths(executable: str, path_entries: Iterable[str] | None = None) -> tuple[str, ...]:
-    """Return all matching executable paths in PATH order."""
+    """Return all matching executable paths in PATH order.
+
+    When inspecting the process PATH directly, the primary command lookup is the
+    authority: if ``shutil.which`` cannot resolve the command, alternate-path
+    scanning must not contradict that result. Explicit ``path_entries`` remain
+    independently inspectable for deterministic PATH analysis and tests.
+    """
+
+    if path_entries is None and shutil.which(executable) is None:
+        return ()
 
     entries = tuple(path_entries or os.environ.get("PATH", "").split(os.pathsep))
     matches: list[str] = []

@@ -42,9 +42,13 @@ def test_install_plan_uses_rpm_ostree_on_bazzite_without_homebrew(monkeypatch: o
     monkeypatch.setattr(
         package_managers,
         "read_os_release",
-        lambda: {"ID": "bazzite", "ID_LIKE": "fedora"},
+        lambda: {"ID": "bazzite", "ID_LIKE": "fedora", "VARIANT_ID": "bazzite"},
     )
-    monkeypatch.setattr(package_managers.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        package_managers.shutil,
+        "which",
+        lambda name: "/usr/bin/rpm-ostree" if name == "rpm-ostree" else None,
+    )
 
     plan = package_managers.install_plan_for_tool("tool.podman", "Podman")
 
@@ -112,6 +116,36 @@ def test_install_plan_includes_python_runtime(monkeypatch: object) -> None:
     assert plan is not None
     assert plan.manager == "APT"
     assert plan.command == "sudo apt install python3 python3-pip"
+
+
+def test_install_plan_uses_zypper_for_opensuse(monkeypatch: object) -> None:
+    monkeypatch.setattr(
+        package_managers,
+        "read_os_release",
+        lambda: {"ID": "opensuse-tumbleweed", "ID_LIKE": "suse opensuse"},
+    )
+    monkeypatch.setattr(package_managers.shutil, "which", lambda name: None)
+
+    plan = package_managers.install_plan_for_tool("tool.git", "Git")
+
+    assert plan is not None
+    assert plan.manager == "Zypper"
+    assert plan.command == "sudo zypper install git"
+
+
+def test_install_plan_uses_nix_as_user_space_fallback(monkeypatch: object) -> None:
+    monkeypatch.setattr(package_managers, "read_os_release", lambda: {"ID": "nixos"})
+    monkeypatch.setattr(
+        package_managers.shutil,
+        "which",
+        lambda name: "/nix/var/nix/profiles/default/bin/nix" if name == "nix" else None,
+    )
+
+    plan = package_managers.install_plan_for_tool("tool.git", "Git")
+
+    assert plan is not None
+    assert plan.manager == "Nix"
+    assert plan.command == "nix profile install nixpkgs#git"
 
 
 def test_detect_package_managers_includes_version_and_command_hint(

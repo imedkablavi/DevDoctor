@@ -1,0 +1,74 @@
+[
+  {
+    "name": "ubuntu-apt",
+    "release": {"ID": "ubuntu", "ID_LIKE": "debian"},
+    "installed": ["apt"],
+    "expected_atomic": false,
+    "expected_primary": "apt",
+    "expected_conflicts": []
+  },
+  {
+    "name": "fedora-dnf",
+    "release": {"ID": "fedora", "VARIANT_ID": "workstation"},
+    "installed": ["dnf", "rpm"],
+    "expected_atomic": false,
+    "expected_primary": "dnf",
+    "expected_conflicts": []
+  },
+  {
+    "name": "fedora-silverblue-rpm-ostree",
+    "release": {"ID": "fedora", "VARIANT_ID": "silverblue", "OSTREE_VERSION": "42.1"},
+    "installed": ["dnf", "rpm", "rpm-ostree", "flatpak"],
+    "expected_atomic": true,
+    "expected_primary": "flatpak",
+    "expected_conflicts": ["atomic-host-dnf"]
+  },
+  {
+    "name": "bazzite-mixed",
+    "release": {"ID": "bazzite", "ID_LIKE": "fedora", "VARIANT_ID": "bazzite"},
+    "installed": ["dnf", "rpm", "rpm-ostree", "flatpak", "brew"],
+    "expected_atomic": true,
+    "expected_primary": "brew",
+    "expected_conflicts": ["atomic-host-dnf"]
+  },
+  {
+    "name": "arch-pacman",
+    "release": {"ID": "arch", "ID_LIKE": "arch"},
+    "installed": ["pacman"],
+    "expected_atomic": false,
+    "expected_primary": "pacman",
+    "expected_conflicts": []
+  },
+  {
+    "name": "opensuse-zypper",
+    "release": {"ID": "opensuse-tumbleweed", "ID_LIKE": "suse opensuse"},
+    "installed": ["zypper", "rpm"],
+    "expected_atomic": false,
+    "expected_primary": "zypper",
+    "expected_conflicts": []
+  },
+  {
+    "name": "nix-user-profile",
+    "release": {"ID": "nixos"},
+    "installed": ["nix"],
+    "expected_atomic": false,
+    "expected_primary": "nix",
+    "expected_conflicts": []
+  },
+  {
+    "name": "flatpak-only",
+    "release": {"ID": "custom"},
+    "installed": ["flatpak"],
+    "expected_atomic": false,
+    "expected_primary": "flatpak",
+    "expected_conflicts": []
+  },
+  {
+    "name": "mixed-system-managers",
+    "release": {"ID": "custom"},
+    "installed": ["apt", "dnf", "flatpak"],
+    "expected_atomic": false,
+    "expected_primary": "flatpak",
+    "expected_conflicts": ["multiple-system-managers"]
+  }
+]

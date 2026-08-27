@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -15,10 +17,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: "pip"
@@ -35,8 +37,48 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Validate performance and memory budgets
+        run: |
+          python scripts/benchmark.py \
+            --iterations 3 \
+            --max-startup-rss-mib 128 \
+            --max-scan-rss-mib 192 \
+            --output /tmp/devdoctor-release-benchmark.json
+
+      - name: Validate installer syntax
+        run: |
+          sh -n scripts/install.sh
+          sh scripts/install.sh --help >/dev/null
+
+      - name: Validate tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          test "$TAG_VERSION" = "$PACKAGE_VERSION" || {
+            echo "Tag v$TAG_VERSION does not match package version $PACKAGE_VERSION" >&2
+            exit 1
+          }
+
+      - name: Classify package version
+        id: package-version
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          from devdoctor import __version__
+
+          prerelease = bool(re.search(r"(?:^|[._-])?(?:a|b|rc|dev)\d*", __version__, re.IGNORECASE))
+          print(f"prerelease={'true' if prerelease else 'false'}")
+          PY
+
       - name: Build distributions
         run: python -m build
+
+      - name: Validate distribution filenames
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}-py3-none-any.whl"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}.tar.gz"
 
       - name: Validate distributions
         run: python -m twine check dist/*
@@ -44,14 +86,65 @@ jobs:
       - name: Validate wheel install
         run: |
           python -m venv /tmp/devdoctor-release-check
-          /tmp/devdoctor-release-check/bin/python -m pip install --find-links dist devdoctor-cli
+          /tmp/devdoctor-release-check/bin/python -m pip install --no-cache-dir dist/*.whl
           /tmp/devdoctor-release-check/bin/devdoctor --version
+          /tmp/devdoctor-release-check/bin/devdoctor completion bash >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor diagnostics --stdout | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor support --stdout >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor project . --json --no-fail | /tmp/devdoctor-release-check/bin/python -m json.tool >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor self-update --help >/dev/null
+          /tmp/devdoctor-release-check/bin/devdoctor self-update | grep -F devdoctor-workstation
+          /tmp/devdoctor-release-check/bin/devdoctor uninstall --help >/dev/null
+
+      - name: Add release-specific install script
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            sed \
+              -e "s/^REQUESTED_VERSION=.*/REQUESTED_VERSION=\"$PACKAGE_VERSION\"/" \
+              -e 's/^INSTALL_SOURCE=.*/INSTALL_SOURCE="github"/' \
+              scripts/install.sh > dist/devdoctor-install.sh
+          else
+            cp scripts/install.sh dist/devdoctor-install.sh
+          fi
+          sh -n dist/devdoctor-install.sh
+          sh dist/devdoctor-install.sh --help >/dev/null
+
+      - name: Generate SPDX SBOM
+        run: python scripts/generate_sbom.py --dist dist --output dist/devdoctor.spdx.json
+
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: |
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' \
+            | sort \
+            | xargs sha256sum > SHA256SUMS
+
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS
+
+      - name: Attest release provenance
+        uses: actions/attest@v4
+        with:
+          subject-checksums: dist/SHA256SUMS
+          create-storage-record: false
+
+      - name: Attest release SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+          sbom-path: dist/devdoctor.spdx.json
+          create-storage-record: false
 
       - name: Upload distribution artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: devdoctor-cli-dist
+          name: devdoctor-workstation-dist
           path: dist/*
+          if-no-files-found: error
 
       - name: Create GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -59,3 +152,31 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          prerelease: ${{ steps.package-version.outputs.prerelease }}
+
+  publish-pypi:
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') &&
+      vars.PYPI_TRUSTED_PUBLISHING_ENABLED == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download tested release distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: devdoctor-workstation-dist
+          path: dist
+
+      - name: Keep only PyPI distributions
+        run: |
+          find dist -maxdepth 1 -type f \
+            ! -name '*.whl' \
+            ! -name '*.tar.gz' \
+            -delete
+
+      - name: Publish with PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1

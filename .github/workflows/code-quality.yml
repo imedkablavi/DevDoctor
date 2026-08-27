@@ -6,16 +6,20 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   package:
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: "pip"
@@ -31,6 +35,12 @@ jobs:
 
       - name: Build package
         run: python -m build
+
+      - name: Validate distribution identity
+        run: |
+          PACKAGE_VERSION="$(python -c 'from devdoctor import __version__; print(__version__)')"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}-py3-none-any.whl"
+          test -f "dist/devdoctor_workstation-${PACKAGE_VERSION}.tar.gz"
 
       - name: Validate package metadata
         run: python -m twine check dist/*
