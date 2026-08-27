@@ -1,0 +1,60 @@
+name: Format fix once
+
+on:
+  push:
+    branches:
+      - hardening/release-pass-2026-08
+    paths:
+      - .github/workflows/format-fix-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v7
+        with:
+          ref: hardening/release-pass-2026-08
+          fetch-depth: 0
+
+      - name: Apply exact Ruff formatting changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("devdoctor/project_diagnostics.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''        upper = (\n            (required[0], required[1] + 1, 0)\n            if len(required) > 1\n            else (required[0] + 1, 0, 0)\n        )'''
+          new = '''        upper = (required[0], required[1] + 1, 0) if len(required) > 1 else (required[0] + 1, 0, 0)'''
+          if old not in text:
+              raise SystemExit("expected project_diagnostics formatting block not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          path = Path("tests/test_project_diagnostics.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''        lambda name, mode=os.F_OK | os.X_OK, path=None: "/usr/bin/python3"\n        if name == "python3"\n        else None,'''
+          new = '''        lambda name, mode=os.F_OK | os.X_OK, path=None: (\n            "/usr/bin/python3" if name == "python3" else None\n        ),'''
+          if old not in text:
+              raise SystemExit("expected test formatting block not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Verify formatter
+        run: |
+          python -m pip install ruff==0.16.4
+          ruff format --check devdoctor/project_diagnostics.py tests/test_project_diagnostics.py
+          ruff check devdoctor/project_diagnostics.py tests/test_project_diagnostics.py
+
+      - name: Commit fix and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/format-fix-once.yml
+          git add devdoctor/project_diagnostics.py tests/test_project_diagnostics.py
+          git commit -m "style: apply release-gate formatting"
+          git push origin HEAD:hardening/release-pass-2026-08
