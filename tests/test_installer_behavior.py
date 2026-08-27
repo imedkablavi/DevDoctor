@@ -35,9 +35,8 @@ BIN_DIR="$(dirname "$0")"
 if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ]; then
   cat > "$BIN_DIR/devdoctor" <<'DEVDOCTOR'
 #!/bin/sh
-RESOLVED="$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")"
-case "$RESOLVED" in
-  *".installing-"*)
+case "$0" in
+  */envs/*)
     echo "DevDoctor 1.2.0rc1"
     exit 0
     ;;
@@ -119,42 +118,60 @@ def test_installer_venv_preflight_fails_before_devdoctor_state_is_created(
     assert not (bin_home / "devdoctor").exists()
 
 
-def test_installer_activates_fresh_validated_environment(tmp_path: Path) -> None:
+def test_installer_activates_immutable_environment_without_moving_it(tmp_path: Path) -> None:
     env, data_home, bin_home = _installer_env(tmp_path)
 
     result = _run_installer(env)
 
-    final = data_home / "devdoctor" / "versions" / VERSION
-    link = bin_home / "devdoctor"
+    envs = list((data_home / "devdoctor" / "envs").iterdir())
     assert result.returncode == 0, result.stderr
-    assert (final / "bin" / "devdoctor").is_file()
+    assert len(envs) == 1
+    installed_env = envs[0]
+    command = installed_env / "bin" / "devdoctor"
+    version_link = data_home / "devdoctor" / "versions" / VERSION
+    link = bin_home / "devdoctor"
+    assert command.is_file()
+    assert version_link.is_symlink()
+    assert version_link.readlink() == installed_env
     assert link.is_symlink()
-    assert link.readlink() == final / "bin" / "devdoctor"
-    assert "Installed DevDoctor 1.2.0rc1." in result.stdout
+    assert link.readlink() == command
+    assert f"Environment: {installed_env}" in result.stdout
 
 
-def test_installer_restores_previous_environment_and_link_on_activation_failure(
-    tmp_path: Path,
-) -> None:
+def test_installer_restores_previous_symlinks_on_activation_failure(tmp_path: Path) -> None:
     env, data_home, bin_home = _installer_env(tmp_path)
-    versions = data_home / "devdoctor" / "versions"
-    previous = versions / "1.1.0"
-    same_version = versions / VERSION
-    previous.mkdir(parents=True)
-    same_version.mkdir(parents=True)
-    (same_version / "old-marker").write_text("keep me", encoding="utf-8")
+    base = data_home / "devdoctor"
+    old_env = base / "envs" / "old-env"
+    old_env.mkdir(parents=True)
+    versions = base / "versions"
+    versions.mkdir(parents=True)
+    version_link = versions / VERSION
+    version_link.symlink_to(old_env)
 
     bin_home.mkdir(parents=True)
     link = bin_home / "devdoctor"
-    old_target = previous / "bin" / "devdoctor"
+    old_target = old_env / "bin" / "devdoctor"
     link.symlink_to(old_target)
     env["DEVDOCTOR_FAKE_FAIL_FINAL"] = "1"
 
     result = _run_installer(env)
 
     assert result.returncode != 0
-    assert (same_version / "old-marker").read_text(encoding="utf-8") == "keep me"
     assert link.is_symlink()
     assert link.readlink() == old_target
-    assert not list((data_home / "devdoctor").glob(".replaced-*"))
-    assert not list((data_home / "devdoctor").glob(".installing-*"))
+    assert version_link.is_symlink()
+    assert version_link.readlink() == old_env
+    assert list((base / "envs").iterdir()) == [old_env]
+    assert not (base / ".install.lock").exists()
+
+
+def test_installer_refuses_concurrent_activation_lock(tmp_path: Path) -> None:
+    env, data_home, _ = _installer_env(tmp_path)
+    lock = data_home / "devdoctor" / ".install.lock"
+    lock.mkdir(parents=True)
+
+    result = _run_installer(env)
+
+    assert result.returncode != 0
+    assert "already active" in result.stderr
+    assert lock.exists()
