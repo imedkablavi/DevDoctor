@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tracemalloc
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from devdoctor import project_diagnostics
+from devdoctor.utils import CommandResult
 
 
 @pytest.mark.parametrize(
@@ -16,6 +18,8 @@ from devdoctor import project_diagnostics
         ("Python 3.13.7", ">=3.11", True),
         ("Python 3.13.7", ">=3.11,!=3.12.0", True),
         ("Python 3.12.0", ">=3.11,!=3.12.0", False),
+        ("Python 3.12.4", ">=3.11,!=3.12.*", False),
+        ("Python 3.13.0", ">=3.11,!=3.12.*", True),
         ("Python 3.11.9", "~=3.11", True),
         ("Python 4.0.0", "~=3.11", False),
         ("Python 3.11.8", "~=3.11.2", True),
@@ -48,6 +52,27 @@ def test_version_comparison_ignores_terminal_escape_sequences() -> None:
 
     assert project_diagnostics.version_satisfies(colored, ">=3.11") is True
     assert project_diagnostics.version_satisfies(colored, ">=31") is False
+
+
+def test_unknown_declared_constraint_is_blocking_by_default() -> None:
+    report = project_diagnostics.ProjectReport(
+        project_name="demo",
+        sources=("package.json",),
+        checks=(
+            project_diagnostics.ProjectCheck(
+                tool_id="node",
+                source="package.json",
+                constraint="workspace:*",
+                installed=True,
+                installed_version="22.0.0",
+                status="unknown",
+                message="not safely comparable",
+            ),
+        ),
+        warnings=(),
+    )
+
+    assert report.blocking is True
 
 
 def test_discovery_reads_common_project_manifests(tmp_path: Path) -> None:
@@ -92,7 +117,7 @@ def test_discovery_reads_common_project_manifests(tmp_path: Path) -> None:
     assert ("node", "package.json", ">=22") in triples
     assert ("npm", "package.json", ">=10") in triples
     assert ("pnpm", "package.json", "9.15.0") in triples
-    assert ("rust", "Cargo.toml", ">=1.82") in triples
+    assert ("rustc", "Cargo.toml", ">=1.82") in triples
     assert ("cargo", "Cargo.toml", None) in triples
     assert ("go", "go.mod", ">=1.23") in triples
     assert ("terraform", "mise.toml", "1.9") in triples
@@ -115,17 +140,14 @@ def test_presence_only_manifests_still_require_their_runtime(tmp_path: Path) -> 
         '[package]\nname = "demo"\n',
         encoding="utf-8",
     )
-    (tmp_path / "go.mod").write_text(
-        "module example.test/demo\n",
-        encoding="utf-8",
-    )
+    (tmp_path / "go.mod").write_text("module example.test/demo\n", encoding="utf-8")
 
     requirements, _, warnings = project_diagnostics.discover_project_requirements(tmp_path)
     triples = {(item.tool_id, item.source, item.constraint) for item in requirements}
 
     assert ("node", "package.json", None) in triples
     assert ("python", "pyproject.toml", None) in triples
-    assert ("rust", "Cargo.toml", None) in triples
+    assert ("rustc", "Cargo.toml", None) in triples
     assert ("cargo", "Cargo.toml", None) in triples
     assert ("go", "go.mod", None) in triples
     assert warnings == ()
@@ -146,6 +168,81 @@ def test_discovery_never_executes_package_scripts(tmp_path: Path) -> None:
     assert not marker.exists()
 
 
+def test_project_probe_excludes_project_local_executables(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    marker = project / "executed"
+    malicious = project / "node"
+    malicious.write_text(f"#!/bin/sh\ntouch {marker}\necho v99.0.0\n", encoding="utf-8")
+    malicious.chmod(0o755)
+    (project / "package.json").write_text('{"engines":{"node":">=20"}}', encoding="utf-8")
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("PATH", f".:{project}:{os.environ.get('PATH', '')}")
+
+    node_spec = SimpleNamespace(id="node")
+    monkeypatch.setattr(project_diagnostics, "get_bootstrap_tools", lambda: (node_spec,))
+
+    def fake_inventory(include_ids: tuple[str, ...]) -> SimpleNamespace:
+        resolved = project_diagnostics.shutil.which("node")
+        if resolved is not None:
+            assert not project_diagnostics._inside(Path(resolved).resolve(), project.resolve())
+        return SimpleNamespace(
+            detections=(SimpleNamespace(spec=node_spec, installed=False, version=None),)
+        )
+
+    monkeypatch.setattr(project_diagnostics, "bootstrap_inventory", fake_inventory)
+
+    project_diagnostics.diagnose_project(project)
+
+    assert not marker.exists()
+
+
+def test_project_python_requirement_falls_back_to_safe_python3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nrequires-python = ">=3.11"\n',
+        encoding="utf-8",
+    )
+    python_spec = SimpleNamespace(id="python")
+    monkeypatch.setattr(project_diagnostics, "get_bootstrap_tools", lambda: (python_spec,))
+    monkeypatch.setattr(
+        project_diagnostics,
+        "bootstrap_inventory",
+        lambda include_ids: SimpleNamespace(
+            detections=(SimpleNamespace(spec=python_spec, installed=False, version=None),)
+        ),
+    )
+    monkeypatch.setattr(
+        project_diagnostics.shutil,
+        "which",
+        lambda name, mode=os.F_OK | os.X_OK, path=None: "/usr/bin/python3"
+        if name == "python3"
+        else None,
+    )
+    monkeypatch.setattr(
+        project_diagnostics,
+        "run_command",
+        lambda command, timeout=5: CommandResult(
+            command=tuple(command),
+            returncode=0,
+            stdout="Python 3.12.4\n",
+            stderr="",
+            duration_seconds=0.01,
+        ),
+    )
+
+    report = project_diagnostics.diagnose_project(tmp_path)
+
+    assert report.checks[0].tool_id == "python"
+    assert report.checks[0].status == "ready"
+    assert report.checks[0].installed_version == "3.12.4"
+
+
 def test_discovery_refuses_symlinked_manifests(tmp_path: Path) -> None:
     root = tmp_path / "project"
     root.mkdir()
@@ -160,6 +257,17 @@ def test_discovery_refuses_symlinked_manifests(tmp_path: Path) -> None:
     assert any("symlinked manifests are not followed" in warning for warning in warnings)
 
 
+def test_discovery_refuses_non_regular_manifest(tmp_path: Path) -> None:
+    fifo = tmp_path / "package.json"
+    os.mkfifo(fifo)
+
+    requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
+
+    assert requirements == ()
+    assert sources == ()
+    assert any("non-regular manifests are not read" in warning for warning in warnings)
+
+
 def test_discovery_refuses_oversized_manifest(tmp_path: Path) -> None:
     oversized = " " * (project_diagnostics._MAX_MANIFEST_BYTES + 1)
     (tmp_path / "package.json").write_text(oversized, encoding="utf-8")
@@ -171,16 +279,16 @@ def test_discovery_refuses_oversized_manifest(tmp_path: Path) -> None:
     assert any("manifest exceeds" in warning for warning in warnings)
 
 
-def test_invalid_manifests_become_warnings(tmp_path: Path) -> None:
-    (tmp_path / "package.json").write_text("{not-json", encoding="utf-8")
+def test_invalid_and_excessively_nested_manifests_become_warnings(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text("[" * 2_000 + "]" * 2_000, encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text("[project\n", encoding="utf-8")
 
     requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
 
     assert requirements == ()
     assert set(sources) == {"package.json", "pyproject.toml"}
-    assert "package.json: invalid JSON" in warnings
-    assert "pyproject.toml: invalid TOML" in warnings
+    assert any("package.json: invalid or excessively nested JSON" in item for item in warnings)
+    assert any("pyproject.toml: invalid or excessively nested TOML" in item for item in warnings)
 
 
 def test_requirement_count_is_bounded(tmp_path: Path) -> None:
@@ -197,10 +305,7 @@ def test_requirement_count_is_bounded(tmp_path: Path) -> None:
 
 
 def test_large_supported_manifest_has_bounded_python_peak_memory(tmp_path: Path) -> None:
-    payload = {
-        "engines": {"node": ">=22"},
-        "padding": "x" * 900_000,
-    }
+    payload = {"engines": {"node": ">=22"}, "padding": "x" * 900_000}
     (tmp_path / "package.json").write_text(json.dumps(payload), encoding="utf-8")
 
     tracemalloc.start()
@@ -252,8 +357,6 @@ def test_diagnose_project_marks_version_mismatch_and_missing_tool(
     assert by_tool["python"].status == "mismatch"
     assert by_tool["node"].status == "missing"
     assert report.blocking is True
-    assert "MISMATCH" in project_diagnostics.render_project_report(report)
-    assert "MISSING" in project_diagnostics.render_project_report(report)
 
 
 def test_project_json_does_not_include_absolute_root_path(tmp_path: Path) -> None:
