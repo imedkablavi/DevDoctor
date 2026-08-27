@@ -62,6 +62,24 @@ jobs:
           if old not in section:
               raise SystemExit("version probe test call not found")
           path.write_text(before + section.replace(old, new, 1), encoding="utf-8")
+
+          path = Path("tests/test_hardening.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              '        lambda: (_manager("apt", installed=True),),': '        lambda *, include_versions=False: (_manager("apt", installed=True),),',
+              '        lambda: (_manager("dnf", installed=True),),': '        lambda *, include_versions=False: (_manager("dnf", installed=True),),',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f"hardening mock not found: {old}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("tests/test_package_manager_probe_budget.py")
+          text = path.read_text(encoding="utf-8")
+          addition = '''\n\ndef test_support_diagnostics_explicitly_request_manager_versions(\n    monkeypatch: object,\n) -> None:\n    from devdoctor import hardening\n\n    requested: list[bool] = []\n    monkeypatch.setattr(\n        hardening,\n        "read_os_release",\n        lambda: {"ID": "ubuntu", "PRETTY_NAME": "Ubuntu"},\n    )\n    monkeypatch.setattr(\n        hardening,\n        "detect_package_managers",\n        lambda *, include_versions=False: requested.append(include_versions) or (),\n    )\n\n    hardening.safe_diagnostic_snapshot()\n\n    assert requested == [True]\n'''
+          if "test_support_diagnostics_explicitly_request_manager_versions" not in text:
+              path.write_text(text.rstrip() + addition, encoding="utf-8")
           PY
 
       - name: Install test dependencies
@@ -73,7 +91,8 @@ jobs:
             devdoctor/package_managers.py \
             devdoctor/hardening.py \
             tests/test_package_managers.py \
-            tests/test_package_manager_probe_budget.py
+            tests/test_package_manager_probe_budget.py \
+            tests/test_hardening.py
 
       - name: Validate lint and format
         run: |
@@ -110,6 +129,7 @@ jobs:
             devdoctor/package_managers.py \
             devdoctor/hardening.py \
             tests/test_package_managers.py \
-            tests/test_package_manager_probe_budget.py
+            tests/test_package_manager_probe_budget.py \
+            tests/test_hardening.py
           git commit -m "perf: make package-manager version probes opt-in"
           git push origin HEAD:perf/lazy-package-manager-versions
