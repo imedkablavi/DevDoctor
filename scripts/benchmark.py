@@ -65,11 +65,16 @@ def measure_startup(iterations: int) -> list[Sample]:
 
 
 def measure_scan(iterations: int) -> list[Sample]:
-    script = (
-        "from devdoctor.bootstrap import bootstrap_inventory; "
-        "bootstrap_inventory(include_ids=('git','python','node'))"
-    )
-    command = [sys.executable, "-c", script]
+    command = [
+        sys.executable,
+        "-m",
+        "devdoctor",
+        "check",
+        "git",
+        "python",
+        "node",
+        "--quiet",
+    ]
     return [_measure_process(command) for _ in range(iterations)]
 
 
@@ -130,7 +135,8 @@ def main() -> int:
         },
         "notes": [
             "Startup executes `python -m devdoctor --version` in a fresh subprocess.",
-            "Bounded scan inventories git, python, and node in a fresh subprocess.",
+            "Bounded scan executes the hardened CLI for git, python, and node.",
+            "Package-manager versions are reused for matching executable paths.",
             "Peak RSS includes observed child processes and is sampled every 5 ms.",
             "CI results are regression budgets, not workstation memory guarantees.",
         ],
