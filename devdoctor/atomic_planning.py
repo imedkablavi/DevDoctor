@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from devdoctor import bootstrap
 from devdoctor.models import JsonValue
@@ -15,6 +15,7 @@ _NIX_CATALOG_KEYS = {
     "rustc": "tool.rust",
     "gh": "tool.github_cli",
 }
+_MANAGER_VERSION_BY_PATH: dict[str, str] = {}
 
 
 def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
@@ -156,6 +157,7 @@ def apply_atomic_planning_patch() -> None:
 
     original_planner = bootstrap.install_plan_for_spec
     original_context = bootstrap.detect_system_context
+    original_tool_version = bootstrap._tool_version
 
     def detect_system_context(
         *,
@@ -163,7 +165,25 @@ def apply_atomic_planning_patch() -> None:
     ) -> Mapping[str, JsonValue]:
         context = dict(original_context(specs=specs))
         context["atomic_host"] = _release_is_atomic(read_os_release())
+
+        _MANAGER_VERSION_BY_PATH.clear()
+        managers = context.get("package_managers", ())
+        if isinstance(managers, list):
+            for manager in managers:
+                if not isinstance(manager, Mapping):
+                    continue
+                path = manager.get("path")
+                version = manager.get("version")
+                if isinstance(path, str) and isinstance(version, str) and version:
+                    _MANAGER_VERSION_BY_PATH[path] = version
         return context
+
+    def tool_version(path: str | None, version_args: Sequence[str]) -> str | None:
+        if path is not None:
+            cached = _MANAGER_VERSION_BY_PATH.get(path)
+            if cached is not None:
+                return cached
+        return original_tool_version(path, version_args)
 
     def planner(
         spec: bootstrap.ToolSpec,
@@ -173,5 +193,6 @@ def apply_atomic_planning_patch() -> None:
         return atomic_install_plan_for_spec(spec, system=system, original=original_planner)
 
     bootstrap.detect_system_context = detect_system_context
+    bootstrap._tool_version = tool_version
     bootstrap.install_plan_for_spec = planner
     _PATCHED = True
