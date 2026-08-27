@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import stat
 import tomllib
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -13,6 +18,7 @@ from typing import Any
 import typer
 
 from devdoctor.bootstrap import bootstrap_inventory, get_bootstrap_tools
+from devdoctor.utils import parse_version, run_command
 
 _MAX_MANIFEST_BYTES = 1_000_000
 _MAX_CONSTRAINT_CHARS = 256
@@ -28,8 +34,8 @@ _TOOL_ALIASES = {
     "pnpm": "pnpm",
     "yarn": "yarn",
     "bun": "bun",
-    "rust": "rust",
-    "rustc": "rust",
+    "rust": "rustc",
+    "rustc": "rustc",
     "cargo": "cargo",
     "go": "go",
     "golang": "go",
@@ -98,7 +104,11 @@ class ProjectReport:
 
     @property
     def blocking(self) -> bool:
-        return any(check.status in {"missing", "mismatch"} for check in self.checks)
+        return any(
+            check.status in {"missing", "mismatch"}
+            or (check.status == "unknown" and check.constraint is not None)
+            for check in self.checks
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,13 +121,72 @@ class ProjectReport:
         }
 
 
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+@contextmanager
+def _safe_probe_environment(project_root: Path) -> Iterator[None]:
+    """Exclude project-controlled PATH entries and symlink targets during probes."""
+
+    root = project_root.resolve()
+    previous_path = os.environ.get("PATH")
+    original_which = shutil.which
+    safe_entries: list[str] = []
+    for raw_entry in (previous_path or "").split(os.pathsep):
+        if not raw_entry or raw_entry == ".":
+            continue
+        candidate = Path(raw_entry).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        try:
+            resolved = candidate.resolve(strict=False)
+        except OSError:
+            continue
+        if _inside(resolved, root):
+            continue
+        safe_entries.append(str(resolved))
+    safe_path = os.pathsep.join(safe_entries)
+
+    def safe_which(
+        command: str,
+        mode: int = os.F_OK | os.X_OK,
+        path: str | None = None,
+    ) -> str | None:
+        lookup_path = safe_path if path is None else path
+        result = original_which(command, mode=mode, path=lookup_path)
+        if result is None:
+            return None
+        try:
+            resolved_result = Path(result).resolve(strict=False)
+        except OSError:
+            return None
+        if _inside(resolved_result, root):
+            return None
+        return result
+
+    os.environ["PATH"] = safe_path
+    shutil.which = safe_which
+    try:
+        yield
+    finally:
+        shutil.which = original_which
+        if previous_path is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = previous_path
+
+
 def _safe_display_text(value: object, *, max_chars: int = _MAX_DISPLAY_CHARS) -> str:
     """Remove terminal sequences/control characters with bounded work and output."""
 
     raw = str(value)
     sample_limit = max(512, max_chars * 4)
-    sample = raw[:sample_limit]
-    sample = _ANSI_OSC_RE.sub("", sample)
+    sample = _ANSI_OSC_RE.sub("", raw[:sample_limit])
     sample = _ANSI_CSI_RE.sub("", sample)
 
     rendered: list[str] = []
@@ -152,7 +221,7 @@ def _normalize_constraint(constraint: str | None) -> str | None:
 
 
 def _safe_manifest_text(path: Path, *, root: Path) -> tuple[str | None, str | None]:
-    """Read a bounded in-project UTF-8 manifest without following symlinks."""
+    """Read a bounded regular UTF-8 manifest without following symlinks."""
 
     try:
         relative = path.relative_to(root).as_posix()
@@ -161,10 +230,12 @@ def _safe_manifest_text(path: Path, *, root: Path) -> tuple[str | None, str | No
     if path.is_symlink():
         return None, f"{relative}: symlinked manifests are not followed"
     try:
-        stat = path.stat()
+        metadata = path.stat()
     except OSError as exc:
         return None, f"{relative}: unable to stat manifest ({exc.__class__.__name__})"
-    if stat.st_size > _MAX_MANIFEST_BYTES:
+    if not stat.S_ISREG(metadata.st_mode):
+        return None, f"{relative}: non-regular manifests are not read"
+    if metadata.st_size > _MAX_MANIFEST_BYTES:
         return None, f"{relative}: manifest exceeds {_MAX_MANIFEST_BYTES} bytes"
 
     try:
@@ -210,15 +281,30 @@ def _has_requirement(
     return any(item.tool_id == tool_id and item.source == source for item in requirements)
 
 
+def _parse_toml(text: str, source: str, warnings: list[str]) -> dict[str, Any] | None:
+    try:
+        document = tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, RecursionError):
+        warnings.append(f"{source}: invalid or excessively nested TOML")
+        return None
+    return document
+
+
+def _parse_json(text: str, source: str, warnings: list[str]) -> Any | None:
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, RecursionError):
+        warnings.append(f"{source}: invalid or excessively nested JSON")
+        return None
+
+
 def _parse_pyproject(
     text: str,
     requirements: list[ProjectRequirement],
     warnings: list[str],
 ) -> None:
-    try:
-        document = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        warnings.append("pyproject.toml: invalid TOML")
+    document = _parse_toml(text, "pyproject.toml", warnings)
+    if document is None:
         return
 
     recognized = False
@@ -271,10 +357,8 @@ def _parse_package_json(
     requirements: list[ProjectRequirement],
     warnings: list[str],
 ) -> None:
-    try:
-        document = json.loads(text)
-    except json.JSONDecodeError:
-        warnings.append("package.json: invalid JSON")
+    document = _parse_json(text, "package.json", warnings)
+    if document is None:
         return
     if not isinstance(document, dict):
         warnings.append("package.json: top-level JSON value is not an object")
@@ -362,10 +446,8 @@ def _parse_mise(
     requirements: list[ProjectRequirement],
     warnings: list[str],
 ) -> None:
-    try:
-        document = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        warnings.append(f"{source}: invalid TOML")
+    document = _parse_toml(text, source, warnings)
+    if document is None:
         return
     tools = document.get("tools")
     if not isinstance(tools, dict):
@@ -389,25 +471,23 @@ def _parse_cargo(
     requirements: list[ProjectRequirement],
     warnings: list[str],
 ) -> None:
-    try:
-        document = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        warnings.append("Cargo.toml: invalid TOML")
+    document = _parse_toml(text, "Cargo.toml", warnings)
+    if document is None:
         return
 
     package = document.get("package")
     if isinstance(package, dict) and isinstance(package.get("rust-version"), str):
         _add_requirement(
             requirements,
-            tool="rust",
+            tool="rustc",
             source="Cargo.toml",
             constraint=f">={package['rust-version']}",
             reason="package.rust-version minimum",
         )
-    if not _has_requirement(requirements, tool="rust", source="Cargo.toml"):
+    if not _has_requirement(requirements, tool="rustc", source="Cargo.toml"):
         _add_requirement(
             requirements,
-            tool="rust",
+            tool="rustc",
             source="Cargo.toml",
             constraint=None,
             reason="Rust package manifest",
@@ -437,11 +517,7 @@ def _parse_devbox(
     requirements: list[ProjectRequirement],
     warnings: list[str],
 ) -> None:
-    try:
-        document = json.loads(text)
-    except json.JSONDecodeError:
-        warnings.append("devbox.json: invalid JSON")
-        return
+    document = _parse_json(text, "devbox.json", warnings)
     if not isinstance(document, dict):
         return
 
@@ -621,7 +697,14 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
     required = tuple(int(part) for part in match.group(2).split("."))
     wildcard = match.group(3)
 
-    if wildcard is not None or not operator:
+    if wildcard is not None:
+        prefix_match = installed[: len(required)] == required
+        if operator == "!=":
+            return not prefix_match
+        if operator in {"", "=", "=="}:
+            return prefix_match
+        return None
+    if not operator:
         return installed[: len(required)] == required
 
     comparison = _compare(installed, required)
@@ -648,7 +731,11 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
             upper = (0, 0, patch + 1)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~":
-        upper = (required[0], required[1] + 1, 0) if len(required) > 1 else (required[0] + 1, 0, 0)
+        upper = (
+            (required[0], required[1] + 1, 0)
+            if len(required) > 1
+            else (required[0] + 1, 0, 0)
+        )
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~=":
         upper = _compatible_upper_bound(required)
@@ -698,8 +785,18 @@ def version_satisfies(
     return None
 
 
+def _project_python3_version() -> str | None:
+    executable = shutil.which("python3")
+    if executable is None:
+        return None
+    result = run_command((executable, "--version"), timeout=5)
+    if result.returncode != 0:
+        return None
+    return parse_version(result.combined_output)
+
+
 def diagnose_project(root: Path) -> ProjectReport:
-    """Compare discovered project requirements with local tool detections."""
+    """Compare discovered project requirements with safely resolved local tools."""
 
     project_root = root.expanduser().resolve()
     requirements, sources, warnings = discover_project_requirements(project_root)
@@ -717,12 +814,19 @@ def diagnose_project(root: Path) -> ProjectReport:
             }
         )
     )
-    inventory = bootstrap_inventory(include_ids=requested_ids) if requested_ids else None
-    detections = (
-        {detection.spec.id: detection for detection in inventory.detections}
-        if inventory is not None
-        else {}
-    )
+    with _safe_probe_environment(project_root):
+        inventory = bootstrap_inventory(include_ids=requested_ids) if requested_ids else None
+        detections = (
+            {detection.spec.id: detection for detection in inventory.detections}
+            if inventory is not None
+            else {}
+        )
+        python3_version = None
+        python_detection = detections.get("python")
+        if any(requirement.tool_id == "python" for requirement in requirements) and (
+            python_detection is None or not python_detection.installed
+        ):
+            python3_version = _project_python3_version()
 
     checks: list[ProjectCheck] = []
     for requirement in requirements:
@@ -741,7 +845,13 @@ def diagnose_project(root: Path) -> ProjectReport:
             continue
 
         detection = detections.get(requirement.tool_id)
-        if detection is None or not detection.installed:
+        installed = bool(detection is not None and detection.installed)
+        detected_version = detection.version if detection is not None else None
+        if requirement.tool_id == "python" and not installed and python3_version is not None:
+            installed = True
+            detected_version = python3_version
+
+        if not installed:
             checks.append(
                 ProjectCheck(
                     tool_id=requirement.tool_id,
@@ -750,12 +860,12 @@ def diagnose_project(root: Path) -> ProjectReport:
                     installed=False,
                     installed_version=None,
                     status="missing",
-                    message="required tool is not installed or discoverable on PATH",
+                    message="required tool is not installed or discoverable on the safe PATH",
                 )
             )
             continue
 
-        satisfies = version_satisfies(detection.version, requirement.constraint)
+        satisfies = version_satisfies(detected_version, requirement.constraint)
         if satisfies is True:
             status = "ready"
             message = "installed tool satisfies the discovered requirement"
@@ -767,7 +877,7 @@ def diagnose_project(root: Path) -> ProjectReport:
             message = (
                 "installed tool was found, but the version constraint is not safely comparable"
             )
-        installed_version = _safe_display_text(detection.version) if detection.version else None
+        installed_version = _safe_display_text(detected_version) if detected_version else None
         checks.append(
             ProjectCheck(
                 tool_id=requirement.tool_id,
@@ -827,7 +937,7 @@ def register_project_diagnostics_command(app: typer.Typer) -> None:
         no_fail: bool = typer.Option(
             False,
             "--no-fail",
-            help="Return exit code 0 even when required tools are missing or incompatible.",
+            help="Return exit code 0 even when requirements cannot be safely proven compatible.",
         ),
     ) -> None:
         """Compare project-declared tool versions with the current workstation."""
