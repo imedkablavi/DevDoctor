@@ -29,6 +29,8 @@ def self_update_command() -> tuple[str, ...]:
 
 
 def _is_atomic_system(system: Mapping[str, JsonValue]) -> bool:
+    if "atomic_host" in system:
+        return system.get("atomic_host") is True
     distro_id = str(system.get("distribution_id", "")).lower()
     if distro_id == "bazzite":
         return True
@@ -37,7 +39,7 @@ def _is_atomic_system(system: Mapping[str, JsonValue]) -> bool:
         for item in system.get("package_managers", ())
         if isinstance(item, Mapping) and item.get("installed") is True
     }
-    return "rpm-ostree" in managers and distro_id in {"fedora", "ublue", "universal-blue"}
+    return "rpm-ostree" in managers and distro_id in {"ublue", "universal-blue"}
 
 
 def _owner_package(detection: ToolDetection) -> tuple[str | None, str | None]:
@@ -69,9 +71,8 @@ def _owner_package(detection: ToolDetection) -> tuple[str | None, str | None]:
                 return "pacman", match.group(1)
         return None, None
 
-    if detection.installation_method == "homebrew path":
-        return "brew", detection.spec.packages.get("brew")
-
+    # A path inside a Homebrew prefix is not ownership proof. Until DevDoctor
+    # has a tested formula-ownership probe, Homebrew uninstall fails closed.
     return None, None
 
 
