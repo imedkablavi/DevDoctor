@@ -168,7 +168,7 @@ def test_detect_package_managers_includes_version_and_command_hint(
         ),
     )
 
-    managers = package_managers.detect_package_managers()
+    managers = package_managers.detect_package_managers(include_versions=True)
     pnpm = next(manager for manager in managers if manager.id == "pnpm")
 
     assert pnpm.installed is True

@@ -50,3 +50,25 @@ def test_manager_version_probes_remain_available_when_requested(monkeypatch: obj
 
     assert pnpm.version == "10.4.1"
     assert calls == [("/usr/bin/pnpm", "--version")]
+
+
+def test_support_diagnostics_explicitly_request_manager_versions(
+    monkeypatch: object,
+) -> None:
+    from devdoctor import hardening
+
+    requested: list[bool] = []
+    monkeypatch.setattr(
+        hardening,
+        "read_os_release",
+        lambda: {"ID": "ubuntu", "PRETTY_NAME": "Ubuntu"},
+    )
+    monkeypatch.setattr(
+        hardening,
+        "detect_package_managers",
+        lambda *, include_versions=False: requested.append(include_versions) or (),
+    )
+
+    hardening.safe_diagnostic_snapshot()
+
+    assert requested == [True]

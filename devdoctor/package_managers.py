@@ -203,8 +203,8 @@ ATOMIC_VARIANTS = {
 SYSTEM_MUTATION_MANAGERS = {"apt", "dnf", "rpm-ostree", "pacman", "zypper", "xbps", "apk"}
 
 
-def detect_package_managers() -> tuple[PackageManagerInfo, ...]:
-    """Detect common Linux package managers and language package managers."""
+def detect_package_managers(*, include_versions: bool = False) -> tuple[PackageManagerInfo, ...]:
+    """Detect package managers; version subprocesses are opt-in."""
 
     managers: list[PackageManagerInfo] = []
     for manager_id, title, executable, family, command_hint in PACKAGE_MANAGERS:
@@ -217,7 +217,7 @@ def detect_package_managers() -> tuple[PackageManagerInfo, ...]:
                 installed=path is not None,
                 path=path,
                 family=family,
-                version=_manager_version(path),
+                version=_manager_version(path) if include_versions else None,
                 command_hint=command_hint,
             )
         )

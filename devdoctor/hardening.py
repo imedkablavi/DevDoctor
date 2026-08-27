@@ -205,7 +205,7 @@ def safe_diagnostic_snapshot() -> dict[str, Any]:
     """Build a richer diagnostic bundle without usernames, hostnames, env secrets, or raw PATH."""
 
     release = read_os_release()
-    managers = detect_package_managers()
+    managers = detect_package_managers(include_versions=True)
     conflicts = package_manager_conflicts(managers, release)
     return {
         "schema_version": 1,
