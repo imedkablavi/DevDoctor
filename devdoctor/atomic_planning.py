@@ -11,6 +11,10 @@ from devdoctor.utils import read_os_release
 
 OriginalPlanner = Callable[..., bootstrap.InstallPlan | None]
 _PATCHED = False
+_NIX_CATALOG_KEYS = {
+    "rustc": "tool.rust",
+    "gh": "tool.github_cli",
+}
 
 
 def _installed_manager_ids(system: Mapping[str, JsonValue]) -> set[str]:
@@ -82,9 +86,14 @@ def _plan_for_manager(
     )
 
 
+def _nix_package(spec: bootstrap.ToolSpec) -> str | None:
+    key = _NIX_CATALOG_KEYS.get(spec.id, f"tool.{spec.id}")
+    return spec.packages.get("nix") or NIX_PACKAGES.get(key)
+
+
 def _mapped_user_space_package(spec: bootstrap.ToolSpec, manager: str) -> str | None:
     if manager == "nix":
-        return spec.packages.get("nix") or NIX_PACKAGES.get(f"tool.{spec.id}")
+        return _nix_package(spec)
     return spec.packages.get(manager)
 
 
