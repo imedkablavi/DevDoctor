@@ -130,41 +130,57 @@ if [ "$ASSUME_YES" -ne 1 ]; then
   esac
 fi
 
-mkdir -p "$BASE_DIR" "$BIN_HOME"
-TEMP_DIR="$BASE_DIR/.installing-$$"
+mkdir -p "$BASE_DIR" "$BIN_HOME" "$BASE_DIR/envs" "$BASE_DIR/versions"
+LOCK_DIR="$BASE_DIR/.install.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "Another DevDoctor installer is already active. Remove $LOCK_DIR only if no installer is running." >&2
+  exit 1
+fi
+
+INSTALL_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+ENV_DIR="$BASE_DIR/envs/$INSTALL_ID"
 DOWNLOAD_DIR="$BASE_DIR/.download-$$"
-BACKUP_DIR=""
-FINAL_DIR=""
-FINAL_CREATED=0
+VERSION_LINK=""
+OLD_VERSION_TARGET=""
+ENV_CREATED=0
 LINK_CHANGED=0
+VERSION_LINK_CHANGED=0
 ACTIVATED=0
+
+restore_symlink() {
+  target="$1"
+  link="$2"
+  if [ -n "$target" ]; then
+    ln -sfn "$target" "$link" 2>/dev/null || true
+  else
+    rm -f "$link"
+  fi
+}
 
 cleanup() {
   if [ "$ACTIVATED" -ne 1 ]; then
-    if [ "$FINAL_CREATED" -eq 1 ] && [ -n "$FINAL_DIR" ] && [ -d "$FINAL_DIR" ]; then
-      rm -rf "$FINAL_DIR"
-    fi
-    if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ -n "$FINAL_DIR" ]; then
-      mv "$BACKUP_DIR" "$FINAL_DIR" 2>/dev/null || true
-    fi
     if [ "$LINK_CHANGED" -eq 1 ]; then
-      if [ -n "$OLD_LINK_TARGET" ]; then
-        ln -sfn "$OLD_LINK_TARGET" "$LINK" 2>/dev/null || true
-      else
-        rm -f "$LINK"
-      fi
+      restore_symlink "$OLD_LINK_TARGET" "$LINK"
     fi
-  elif [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
-    rm -rf "$BACKUP_DIR"
+    if [ "$VERSION_LINK_CHANGED" -eq 1 ] && [ -n "$VERSION_LINK" ]; then
+      restore_symlink "$OLD_VERSION_TARGET" "$VERSION_LINK"
+    fi
+    if [ "$ENV_CREATED" -eq 1 ] && [ -d "$ENV_DIR" ]; then
+      rm -rf "$ENV_DIR"
+    fi
   fi
-  rm -rf "$TEMP_DIR" "$DOWNLOAD_DIR"
+  rm -rf "$DOWNLOAD_DIR"
+  rmdir "$LOCK_DIR" 2>/dev/null || true
 }
 trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-python3 -m venv "$TEMP_DIR"
+# ENV_DIR is the virtualenv's permanent path. Never move/rename it after creation;
+# Python console-script shebangs embed this absolute path.
+python3 -m venv "$ENV_DIR"
+ENV_CREATED=1
 
 if [ "$INSTALL_SOURCE" = "github" ]; then
   WHEEL_FILE="devdoctor_workstation-${REQUESTED_VERSION}-py3-none-any.whl"
@@ -202,44 +218,44 @@ else
   INSTALL_SPEC="$SPEC"
 fi
 
-"$TEMP_DIR/bin/python" -m pip install --no-cache-dir "$INSTALL_SPEC"
-ACTUAL_VERSION="$($TEMP_DIR/bin/python -c 'from importlib.metadata import version; print(version("devdoctor-workstation"))')"
+"$ENV_DIR/bin/python" -m pip install --no-cache-dir "$INSTALL_SPEC"
+ACTUAL_VERSION="$($ENV_DIR/bin/python -c 'from importlib.metadata import version; print(version("devdoctor-workstation"))')"
 
 if [ "$REQUESTED_VERSION" != "latest" ] && [ "$ACTUAL_VERSION" != "$REQUESTED_VERSION" ]; then
   echo "Installed version $ACTUAL_VERSION does not match requested $REQUESTED_VERSION." >&2
   exit 1
 fi
 
-"$TEMP_DIR/bin/devdoctor" --version >/dev/null
+# Validate the exact immutable environment before exposing it through any symlink.
+"$ENV_DIR/bin/devdoctor" --version >/dev/null
 
-FINAL_DIR="$BASE_DIR/versions/$ACTUAL_VERSION"
-mkdir -p "$BASE_DIR/versions"
-
-if [ -d "$FINAL_DIR" ]; then
-  BACKUP_DIR="$BASE_DIR/.replaced-$ACTUAL_VERSION-$$"
-  mv "$FINAL_DIR" "$BACKUP_DIR"
+VERSION_LINK="$BASE_DIR/versions/$ACTUAL_VERSION"
+if [ -e "$VERSION_LINK" ] && [ ! -L "$VERSION_LINK" ]; then
+  echo "Refusing to replace legacy non-symlink version path: $VERSION_LINK" >&2
+  exit 1
+fi
+if [ -L "$VERSION_LINK" ]; then
+  OLD_VERSION_TARGET="$(readlink "$VERSION_LINK" 2>/dev/null || true)"
 fi
 
-if ! mv "$TEMP_DIR" "$FINAL_DIR"; then
+ln -sfn "$ENV_DIR" "$VERSION_LINK"
+VERSION_LINK_CHANGED=1
+ln -sfn "$ENV_DIR/bin/devdoctor" "$LINK"
+LINK_CHANGED=1
+
+if ! "$LINK" --version >/dev/null; then
   echo "Failed to activate the freshly validated DevDoctor environment." >&2
   exit 1
 fi
-FINAL_CREATED=1
-
-ln -sfn "$FINAL_DIR/bin/devdoctor" "$LINK"
-LINK_CHANGED=1
-"$LINK" --version
 ACTIVATED=1
-
-if [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
-  rm -rf "$BACKUP_DIR"
-  BACKUP_DIR=""
-fi
 
 trap - EXIT HUP INT TERM
 rm -rf "$DOWNLOAD_DIR"
+rmdir "$LOCK_DIR" 2>/dev/null || true
 
 printf '%s\n' \
   "Installed DevDoctor $ACTUAL_VERSION." \
-  "Re-running the same version replaces its virtual environment with a freshly validated one." \
-  "Rollback across versions: repoint $LINK to a previous directory under $BASE_DIR/versions or remove the link."
+  "Environment: $ENV_DIR" \
+  "Version pointer: $VERSION_LINK" \
+  "Re-running the same version activates a freshly validated immutable environment." \
+  "Rollback: repoint $LINK to another environment under $BASE_DIR/envs or use a version pointer under $BASE_DIR/versions."
