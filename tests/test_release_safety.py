@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import typer
 
 from devdoctor import release_safety
@@ -12,6 +13,7 @@ def _detection(
     package_manager: str | None,
     packages: dict[str, str],
     installation_method: str | None = None,
+    executable_path: str = "/usr/bin/git",
 ) -> ToolDetection:
     spec = ToolSpec(
         id="git",
@@ -23,7 +25,7 @@ def _detection(
     return ToolDetection(
         spec=spec,
         installed=True,
-        executable_path="/usr/bin/git",
+        executable_path=executable_path,
         version="2.45.0",
         package_manager=package_manager,
         package_name=None,
@@ -59,7 +61,7 @@ def test_self_update_uses_published_distribution_name() -> None:
     assert command[-1] != "devdoctor"
 
 
-def test_uninstall_uses_detected_dpkg_owner(monkeypatch: object) -> None:
+def test_uninstall_uses_detected_dpkg_owner(monkeypatch: pytest.MonkeyPatch) -> None:
     detection = _detection(package_manager="dpkg", packages={"apt": "git"})
 
     monkeypatch.setattr(
@@ -79,7 +81,9 @@ def test_uninstall_uses_detected_dpkg_owner(monkeypatch: object) -> None:
     assert plan.command == ("sudo", "apt", "remove", "git")
 
 
-def test_uninstall_fails_closed_when_owner_does_not_match_catalog(monkeypatch: object) -> None:
+def test_uninstall_fails_closed_when_owner_does_not_match_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     detection = _detection(package_manager="dpkg", packages={"apt": "git"})
 
     monkeypatch.setattr(
@@ -96,7 +100,9 @@ def test_uninstall_fails_closed_when_owner_does_not_match_catalog(monkeypatch: o
     assert plan is None
 
 
-def test_atomic_rpm_ownership_is_not_treated_as_layering_proof(monkeypatch: object) -> None:
+def test_atomic_rpm_ownership_is_not_treated_as_layering_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     detection = _detection(package_manager="rpm", packages={"dnf": "git"})
 
     monkeypatch.setattr(
@@ -108,9 +114,49 @@ def test_atomic_rpm_ownership_is_not_treated_as_layering_proof(monkeypatch: obje
     plan = release_safety.uninstall_plan_for_detection(
         detection,
         system={
-            "distribution_id": "bazzite",
+            "atomic_host": True,
+            "distribution_id": "fedora",
+            "package_managers": [],
+        },
+    )
+
+    assert plan is None
+
+
+def test_persisted_mutable_flag_allows_owned_rpm_package(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    detection = _detection(package_manager="rpm", packages={"dnf": "git"})
+    monkeypatch.setattr(
+        release_safety,
+        "run_command",
+        lambda command, timeout=4: _result(tuple(command), "git"),
+    )
+
+    plan = release_safety.uninstall_plan_for_detection(
+        detection,
+        system={
+            "atomic_host": False,
+            "distribution_id": "fedora",
             "package_managers": [{"id": "rpm-ostree", "installed": True}],
         },
+    )
+
+    assert plan is not None
+    assert plan.command == ("sudo", "dnf", "remove", "git")
+
+
+def test_homebrew_path_is_not_treated_as_formula_ownership_proof() -> None:
+    detection = _detection(
+        package_manager=None,
+        packages={"brew": "git"},
+        installation_method="homebrew path",
+        executable_path="/home/linuxbrew/.linuxbrew/bin/git",
+    )
+
+    plan = release_safety.uninstall_plan_for_detection(
+        detection,
+        system={"atomic_host": False, "distribution_id": "ubuntu"},
     )
 
     assert plan is None
