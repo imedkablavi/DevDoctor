@@ -60,6 +60,17 @@ jobs:
             exit 1
           }
 
+      - name: Classify package version
+        id: package-version
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import re
+          from devdoctor import __version__
+
+          prerelease = bool(re.search(r"(?:^|[._-])?(?:a|b|rc|dev)\d*", __version__, re.IGNORECASE))
+          print(f"prerelease={'true' if prerelease else 'false'}")
+          PY
+
       - name: Build distributions
         run: python -m build
 
@@ -141,7 +152,7 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, 'rc') }}
+          prerelease: ${{ steps.package-version.outputs.prerelease }}
 
   publish-pypi:
     if: >-
