@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from devdoctor import atomic_planning, bootstrap
 
 
-def _git_spec() -> bootstrap.ToolSpec:
-    return next(spec for spec in bootstrap.get_bootstrap_tools() if spec.id == "git")
+def _spec(tool_id: str) -> bootstrap.ToolSpec:
+    return next(spec for spec in bootstrap.get_bootstrap_tools() if spec.id == tool_id)
 
 
 def _system(*manager_ids: str, distribution_id: str = "bazzite") -> dict[str, object]:
@@ -56,7 +58,7 @@ def test_atomic_detection_uses_collected_system_context() -> None:
 
 def test_atomic_main_planner_reuses_fedora_mapping_for_rpm_ostree() -> None:
     plan = atomic_planning.atomic_install_plan_for_spec(
-        _git_spec(),
+        _spec("git"),
         system=_system("dnf", "rpm-ostree", "flatpak"),
         original=lambda spec, system: None,
     )
@@ -71,7 +73,7 @@ def test_atomic_main_planner_reuses_fedora_mapping_for_rpm_ostree() -> None:
 
 def test_atomic_main_planner_prefers_homebrew_when_mapped() -> None:
     plan = atomic_planning.atomic_install_plan_for_spec(
-        _git_spec(),
+        _spec("git"),
         system=_system("brew", "rpm-ostree", "dnf"),
         original=lambda spec, system: None,
     )
@@ -101,16 +103,27 @@ def test_atomic_main_planner_prefers_mapped_user_space_manager_before_layering()
     assert plan.command == ("npm", "install", "-g", "example-node-tool")
 
 
-def test_atomic_main_planner_prefers_explicit_nix_mapping_before_layering() -> None:
+@pytest.mark.parametrize(
+    ("tool_id", "package"),
+    [
+        ("git", "nixpkgs#git"),
+        ("rustc", "nixpkgs#rustup"),
+        ("gh", "nixpkgs#gh"),
+    ],
+)
+def test_atomic_main_planner_prefers_nix_mapping_before_layering(
+    tool_id: str,
+    package: str,
+) -> None:
     plan = atomic_planning.atomic_install_plan_for_spec(
-        _git_spec(),
+        _spec(tool_id),
         system=_system("nix", "rpm-ostree", "dnf"),
         original=lambda spec, system: None,
     )
 
     assert plan is not None
     assert plan.manager == "nix"
-    assert plan.command == ("nix", "profile", "install", "nixpkgs#git")
+    assert plan.command == ("nix", "profile", "install", package)
 
 
 def test_atomic_main_planner_never_falls_back_to_original_dnf() -> None:
@@ -122,7 +135,7 @@ def test_atomic_main_planner_never_falls_back_to_original_dnf() -> None:
         raise AssertionError("original mutable-host planner must not run on Atomic")
 
     plan = atomic_planning.atomic_install_plan_for_spec(
-        _git_spec(),
+        _spec("git"),
         system=_system("dnf"),
         original=original,
     )
