@@ -731,11 +731,7 @@ def _satisfies_atom(installed: tuple[int, ...], atom: str) -> bool | None:
             upper = (0, 0, patch + 1)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~":
-        upper = (
-            (required[0], required[1] + 1, 0)
-            if len(required) > 1
-            else (required[0] + 1, 0, 0)
-        )
+        upper = (required[0], required[1] + 1, 0) if len(required) > 1 else (required[0] + 1, 0, 0)
         return comparison >= 0 and _compare(installed, upper) < 0
     if operator == "~=":
         upper = _compatible_upper_bound(required)

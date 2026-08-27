@@ -220,9 +220,9 @@ def test_project_python_requirement_falls_back_to_safe_python3(
     monkeypatch.setattr(
         project_diagnostics.shutil,
         "which",
-        lambda name, mode=os.F_OK | os.X_OK, path=None: "/usr/bin/python3"
-        if name == "python3"
-        else None,
+        lambda name, mode=os.F_OK | os.X_OK, path=None: (
+            "/usr/bin/python3" if name == "python3" else None
+        ),
     )
     monkeypatch.setattr(
         project_diagnostics,
