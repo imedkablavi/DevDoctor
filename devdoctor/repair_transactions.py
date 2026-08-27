@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 import uuid
@@ -15,9 +16,35 @@ import typer
 
 from devdoctor import bootstrap
 from devdoctor.paths import state_dir
-from devdoctor.utils import run_command
+from devdoctor.utils import get_username, run_command
 
 _REGISTERED = False
+_SAFE_PACKAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@/#=-]{0,255}$")
+_MANAGER_ROLLBACK_PREFIXES: dict[str, tuple[str, ...]] = {
+    "apt": ("sudo", "apt", "remove"),
+    "dnf": ("sudo", "dnf", "remove"),
+    "rpm-ostree": ("rpm-ostree", "uninstall"),
+    "pacman": ("sudo", "pacman", "-R"),
+    "yay": ("yay", "-R"),
+    "paru": ("paru", "-R"),
+    "zypper": ("sudo", "zypper", "remove"),
+    "xbps": ("sudo", "xbps-remove"),
+    "apk": ("sudo", "apk", "del"),
+    "nix": ("nix", "profile", "remove"),
+    "brew": ("brew", "uninstall"),
+    "flatpak": ("flatpak", "uninstall"),
+    "snap": ("sudo", "snap", "remove"),
+    "pipx": ("pipx", "uninstall"),
+    "npm": ("npm", "uninstall", "-g"),
+    "pnpm": ("pnpm", "remove", "-g"),
+    "yarn": ("yarn", "global", "remove"),
+    "gem": ("gem", "uninstall"),
+    "composer": ("composer", "global", "remove"),
+    "rustup": ("rustup", "toolchain", "uninstall"),
+    "mise": ("mise", "uninstall"),
+    "asdf": ("asdf", "uninstall"),
+}
+_NIX_CATALOG_KEYS = {"rustc": "rust", "gh": "github_cli"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,34 +110,96 @@ def _write_transaction(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def _allowed_rollback_command(command: tuple[str, ...]) -> bool:
-    """Constrain persisted rollback execution to command forms emitted by DevDoctor."""
+def _spec_for_tool(tool_id: str) -> bootstrap.ToolSpec | None:
+    return next((spec for spec in bootstrap.get_bootstrap_tools() if spec.id == tool_id), None)
 
-    allowed_prefixes = (
-        ("sudo", "apt", "remove"),
-        ("sudo", "dnf", "remove"),
-        ("sudo", "pacman", "-R"),
-        ("sudo", "zypper", "remove"),
-        ("sudo", "xbps-remove"),
-        ("sudo", "apk", "del"),
-        ("sudo", "snap", "remove"),
-        ("rpm-ostree", "uninstall"),
-        ("nix", "profile", "remove"),
-        ("brew", "uninstall"),
-        ("flatpak", "uninstall"),
-        ("pipx", "uninstall"),
-        ("npm", "uninstall", "-g"),
-        ("pnpm", "remove", "-g"),
-        ("yarn", "global", "remove"),
-        ("gem", "uninstall"),
-        ("composer", "global", "remove"),
-        ("rustup", "toolchain", "uninstall"),
-        ("mise", "uninstall"),
-        ("asdf", "uninstall"),
-        ("sudo", "systemctl", "stop", "docker"),
-        ("sudo", "gpasswd", "-d"),
-    )
-    return any(command[: len(prefix)] == prefix for prefix in allowed_prefixes)
+
+def _expected_package(spec: bootstrap.ToolSpec, manager: str) -> str | None:
+    if manager == "rpm-ostree":
+        return spec.packages.get("rpm-ostree") or spec.packages.get("dnf")
+    if manager == "nix":
+        alias = _NIX_CATALOG_KEYS.get(spec.id, spec.id)
+        return spec.packages.get("nix") or {
+            "git": "nixpkgs#git",
+            "rust": "nixpkgs#rustup",
+            "github_cli": "nixpkgs#gh",
+        }.get(alias)
+    return spec.packages.get(manager)
+
+
+def _allowed_rollback_command(command: tuple[str, ...], tool_id: str | None = None) -> bool:
+    """Validate a complete rollback shape, optionally against the tool catalog."""
+
+    if tool_id == "docker" and command == ("sudo", "systemctl", "stop", "docker"):
+        return True
+    if (
+        tool_id == "docker"
+        and len(command) == 5
+        and command[:3] == ("sudo", "gpasswd", "-d")
+        and command[3] == get_username()
+        and command[4] == "docker"
+    ):
+        return True
+
+    spec = _spec_for_tool(tool_id) if tool_id is not None else None
+    for manager, prefix in _MANAGER_ROLLBACK_PREFIXES.items():
+        if len(command) != len(prefix) + 1 or command[: len(prefix)] != prefix:
+            continue
+        package = command[-1]
+        if not _SAFE_PACKAGE.fullmatch(package):
+            return False
+        if spec is None:
+            return True
+        expected = _expected_package(spec, manager)
+        return expected == package
+    return False
+
+
+def _execute_repair_action(
+    action: RepairAction,
+    *,
+    payload: dict[str, Any],
+    path: Path,
+) -> dict[str, Any]:
+    """Persist rollback intent before executing, then atomically record the outcome."""
+
+    record: dict[str, Any] = {
+        "tool_id": action.tool_id,
+        "tool_title": action.tool_title,
+        "problem": action.problem,
+        "risk": action.risk,
+        "command": list(action.command),
+        "rollback_command": list(action.rollback_command),
+        "exit_code": None,
+        "duration_seconds": None,
+        "status": "pending",
+        "verification_command": (
+            list(action.verification_command) if action.verification_command else None
+        ),
+        "verification_exit_code": None,
+    }
+    payload["actions"].append(record)
+    _write_transaction(path, payload)
+
+    started = time.perf_counter()
+    try:
+        completed = subprocess.run(list(action.command), check=False)
+    except OSError:
+        record["duration_seconds"] = round(time.perf_counter() - started, 3)
+        record["status"] = "execution-error"
+        _write_transaction(path, payload)
+        return record
+
+    record["exit_code"] = completed.returncode
+    record["duration_seconds"] = round(time.perf_counter() - started, 3)
+    record["status"] = "failed" if completed.returncode else "applied"
+    if completed.returncode == 0 and action.verification_command:
+        verification = run_command(action.verification_command, timeout=10)
+        record["verification_exit_code"] = verification.returncode
+        if verification.returncode != 0:
+            record["status"] = "verification-failed"
+    _write_transaction(path, payload)
+    return record
 
 
 def _validate_tool_ids(tool_ids: tuple[str, ...]) -> None:
@@ -176,36 +265,14 @@ def register_repair_transaction_commands(app: typer.Typer) -> None:
             rendered = _render_command(action.command)
             if not yes and not typer.confirm(f"Run `{rendered}`?"):
                 continue
-            started = time.perf_counter()
-            completed = subprocess.run(list(action.command), check=False)
-            record: dict[str, Any] = {
-                "tool_id": action.tool_id,
-                "tool_title": action.tool_title,
-                "problem": action.problem,
-                "risk": action.risk,
-                "command": list(action.command),
-                "rollback_command": list(action.rollback_command),
-                "exit_code": completed.returncode,
-                "duration_seconds": round(time.perf_counter() - started, 3),
-                "status": "failed" if completed.returncode else "applied",
-                "verification_command": (
-                    list(action.verification_command) if action.verification_command else None
-                ),
-                "verification_exit_code": None,
-            }
-            if completed.returncode == 0 and action.verification_command:
-                verification = run_command(action.verification_command, timeout=10)
-                record["verification_exit_code"] = verification.returncode
-                if verification.returncode != 0:
-                    record["status"] = "verification-failed"
-            payload["actions"].append(record)
-            _write_transaction(path, payload)
+            record = _execute_repair_action(action, payload=payload, path=path)
             if record["status"] != "applied":
                 typer.echo(
                     f"Repair stopped with status {record['status']}. "
                     f"Preview rollback with: devdoctor repair-rollback {transaction_id}"
                 )
-                raise typer.Exit(code=completed.returncode or 1)
+                exit_code = record.get("exit_code")
+                raise typer.Exit(code=int(exit_code) if isinstance(exit_code, int) else 1)
 
         if payload["actions"]:
             typer.echo(f"Repair transaction: {transaction_id}")
@@ -228,19 +295,34 @@ def register_repair_transaction_commands(app: typer.Typer) -> None:
             raise typer.BadParameter(str(exc)) from exc
         if not path.exists():
             raise typer.BadParameter(f"unknown transaction: {transaction_id}")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        if payload.get("schema_version") != 1 or payload.get("transaction_id") != transaction_id:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, RecursionError) as exc:
+            raise typer.BadParameter("invalid or unreadable transaction journal") from exc
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema_version") != 1
+            or payload.get("transaction_id") != transaction_id
+            or not isinstance(payload.get("actions"), list)
+        ):
             raise typer.BadParameter("invalid or incompatible transaction journal")
 
         candidates: list[dict[str, Any]] = []
-        for record in reversed(payload.get("actions", [])):
-            if record.get("status") not in {"applied", "verification-failed"}:
+        rollback_states = {
+            "pending",
+            "failed",
+            "execution-error",
+            "verification-failed",
+            "applied",
+            "rollback-failed",
+        }
+        for record in reversed(payload["actions"]):
+            if not isinstance(record, dict) or record.get("status") not in rollback_states:
                 continue
             command = tuple(str(part) for part in record.get("rollback_command", ()))
-            if not command or not _allowed_rollback_command(command):
-                typer.echo(
-                    f"Blocked unrecognized rollback command for {record.get('tool_id', 'unknown')}."
-                )
+            tool_id = str(record.get("tool_id", ""))
+            if not command or not _allowed_rollback_command(command, tool_id=tool_id):
+                typer.echo(f"Blocked invalid rollback command for {tool_id or 'unknown'}.")
                 continue
             record["_rollback_tuple"] = command
             candidates.append(record)
