@@ -189,7 +189,7 @@ def test_safe_diagnostics_do_not_include_raw_home_or_environment_values(
     monkeypatch.setattr(
         hardening,
         "detect_package_managers",
-        lambda: (_manager("apt", installed=True),),
+        lambda *, include_versions=False: (_manager("apt", installed=True),),
     )
 
     snapshot = hardening.safe_diagnostic_snapshot()
@@ -218,7 +218,7 @@ def test_safe_diagnostics_keep_known_session_and_shell_values(
     monkeypatch.setattr(
         hardening,
         "detect_package_managers",
-        lambda: (_manager("dnf", installed=True),),
+        lambda *, include_versions=False: (_manager("dnf", installed=True),),
     )
 
     snapshot = hardening.safe_diagnostic_snapshot()
