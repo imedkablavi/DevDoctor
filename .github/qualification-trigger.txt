@@ -1,1 +1,0 @@
-Temporary qualification trigger for PR #14. Removed immediately.
