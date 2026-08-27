@@ -279,9 +279,18 @@ def test_discovery_refuses_oversized_manifest(tmp_path: Path) -> None:
     assert any("manifest exceeds" in warning for warning in warnings)
 
 
-def test_invalid_and_excessively_nested_manifests_become_warnings(tmp_path: Path) -> None:
-    (tmp_path / "package.json").write_text("[" * 2_000 + "]" * 2_000, encoding="utf-8")
+def test_invalid_and_excessively_nested_manifests_become_warnings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text("[project\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        project_diagnostics.json,
+        "loads",
+        lambda _text: (_ for _ in ()).throw(RecursionError("nested JSON")),
+    )
 
     requirements, sources, warnings = project_diagnostics.discover_project_requirements(tmp_path)
 
